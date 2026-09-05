@@ -43,9 +43,16 @@ full-bleed frame, the next two as the detail pair, and shows **every** frame
 
 ## The editor (`#/admin`)
 
-Sign in with the same account as the photo library. There is no separate
-password and no backend of its own — nomadman calls the worker's existing
-`/login` and album APIs straight from the browser.
+**One editor, and it isn't linked from anywhere public.** Reach it by typing
+`#/admin`. Sign in with the same account as the photo library — there's no
+separate password and no backend of its own; nomadman calls the worker's
+existing `/login` and album APIs straight from the browser.
+
+Only the super-user (`PHOTO_SUPERUSER_USER_ID` / `PHOTO_SUPERUSER_EMAIL`) can
+publish. Any other account that reaches this route is told it isn't their
+journal. That's courtesy — the control is server-side: the worker **rejects a
+`journal` write from any non-super account**, so owning an album is enough to
+share it and never enough to put it on this front page.
 
 - **In the journal** — the toggle that publishes an album. That's the sync.
 - **Order / Date label / home hero** — where it sits and how it's captioned.
@@ -62,6 +69,7 @@ This site depends on worker changes that are **not deployed yet** — until they
 are, the journal renders its empty state:
 
 - `GET /journal/api/trips`, the public trip feed (new).
+- The super-user gate on publishing (`PATCH .../albums/:id` with `journal`).
 - `Access-Control-Allow-Origin: *` on `GET /share/:token/api/album`, so the
   album JSON can be read cross-origin. Both endpoints were already public and
   forwardable, so neither exposes anything new.

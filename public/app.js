@@ -116,12 +116,11 @@ function emptyState() {
     <h1 style="font-size:clamp(30px,4vw,52px)">The journal is empty.</h1>
     <p style="margin:24px 0 0;font-size:17px;line-height:1.7;color:var(--muted);text-wrap:pretty">
       ${feedError
-        ? `The trip feed could not be reached — <code>${esc(feedError)}</code>. Entries appear as soon as the site can read <code>/journal/api/trips</code>.`
-        : "A trip is an album from your photo library that you've published here. Sign in, pick an album, and it shows up on this page with its photos."}
+        ? "Entries could not be loaded just now. Please try again in a moment."
+        : "Nothing has been published here yet. Check back soon."}
     </p>
     <div style="display:flex;gap:12px;margin:32px 0 0;flex-wrap:wrap">
-      <a class="btn btn-primary" href="#/admin">Sign in and publish <span class="ico" style="font-size:17px">arrow_forward</span></a>
-      <a class="btn btn-ghost" href="${esc(CFG.apiBase)}/photos" target="_blank" rel="noopener">Open the photo library</a>
+      <a class="btn btn-ghost" href="#/">Back to the front <span class="ico" style="font-size:17px">arrow_forward</span></a>
     </div>
   </div>
 </div>`;

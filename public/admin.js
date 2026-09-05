@@ -11,6 +11,11 @@
 //
 // Publishing is the whole "sync": once an album is in the journal, the public
 // pages read its photos live through its share token. Nothing is copied.
+//
+// The journal has ONE editor. This route isn't linked from anywhere public and
+// refuses any account that isn't the super-user — but that's courtesy, not the
+// control: the worker rejects a journal write from anyone else regardless of
+// what this file does (see the gate in src/photos/handler.js).
 
 import { CFG, esc, afterRender, loadTrips } from "./app.js";
 
@@ -19,6 +24,7 @@ const TOKEN_KEY = "nomadman_token";
 const EMAIL_KEY = "nomadman_email";
 
 let albums = [];
+let isSuper = null; // null = not checked yet
 let error = "";
 let busy = false;
 
@@ -86,7 +92,19 @@ function signOut(rerender = true) {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(EMAIL_KEY);
   albums = [];
+  isSuper = null;
   if (rerender) renderAdmin();
+}
+
+// The worker decides this, not the browser — /photos/api/config reports the
+// caller's super-user status, and the PATCH gate re-checks it server-side
+// regardless of what this returns. Hiding the editor is courtesy; the gate is
+// the actual control.
+async function loadIdentity() {
+  const cfg = await api("/photos/api/config");
+  isSuper = !!cfg.isSuper;
+  if (cfg.email) localStorage.setItem(EMAIL_KEY, cfg.email);
+  return isSuper;
 }
 
 // ── views ──────────────────────────────────────────────────────────
@@ -305,8 +323,25 @@ function wireLogin(root) {
 }
 
 async function refresh() {
+  if (!(await loadIdentity())) return; // no point listing albums they can't publish
   albums = await api("/photos/api/albums");
   await loadTrips();
+}
+
+function notOwnerView() {
+  return `
+<div class="view page">
+  <div class="inner" style="max-width:460px">
+    <div class="kicker">Journal editor</div>
+    <h1 style="font-size:clamp(28px,3.6vw,44px)">Not your journal.</h1>
+    <p style="margin:20px 0 0;font-size:15px;line-height:1.7;color:var(--muted)">
+      You're signed in as ${esc(account())}, but only the journal owner can
+      publish trips here. Your own albums are unaffected — they live at
+      <a href="${esc(CFG.apiBase)}/photos" target="_blank" rel="noopener">/photos</a>.
+    </p>
+    <button class="btn btn-ghost" id="sign-out" style="margin-top:26px">Sign out</button>
+  </div>
+</div>`;
 }
 
 // ── entry point ────────────────────────────────────────────────────
@@ -314,18 +349,39 @@ async function refresh() {
 export async function renderAdmin() {
   const root = document.getElementById("view");
 
-  if (token() && !albums.length && !error) {
+  if (token() && isSuper === null && !error) {
     try {
-      albums = await api("/photos/api/albums");
+      await refresh();
     } catch (err) {
       error = err.message;
     }
   }
 
-  const signedIn = !!token();
-  root.innerHTML = signedIn ? editorView() : loginView();
-  afterRender("admin");
+  if (!token()) {
+    root.innerHTML = loginView();
+    afterRender("admin");
+    wireLogin(root);
+    return;
+  }
 
-  if (signedIn) wireEditor(root);
-  else wireLogin(root);
+  if (isSuper === false) {
+    root.innerHTML = notOwnerView();
+    afterRender("admin");
+    root.querySelector("#sign-out").addEventListener("click", () => signOut());
+    return;
+  }
+
+  if (isSuper !== true) {
+    // Identity couldn't be confirmed (network, expired session). Fall back to
+    // the sign-in form with the reason rather than an editor shell that can't
+    // save anything.
+    root.innerHTML = loginView();
+    afterRender("admin");
+    wireLogin(root);
+    return;
+  }
+
+  root.innerHTML = editorView();
+  afterRender("admin");
+  wireEditor(root);
 }
