@@ -11,17 +11,27 @@
 //   {apiBase}/share/{token}/photos/{id}/original   editorial frames
 //
 // config.json holds only the API origin and the site's own standing copy.
-// Publishing, ordering and writing an entry all happen in #/admin.
+// Publishing, ordering and writing an entry all happen at /admin.
 
 // ── pure helpers (exported for test.js) ─────────────────────────────
 
-/** "#/trip/kyoto" -> { view: "story", id: "kyoto" } */
-export function routeOf(hash) {
-  const parts = String(hash || "").replace(/^#\/?/, "").split("/").filter(Boolean);
+/**
+ * "/trip/kyoto" -> { view: "story", id: "kyoto" }
+ * Real paths, not hashes: the Worker serves index.html for anything that isn't
+ * a file (not_found_handling = single-page-application) and this decides what
+ * to draw. Links shared before real paths existed are rewritten on boot.
+ */
+export function routeOf(pathname) {
+  const parts = String(pathname || "/").split("?")[0].split("/").filter(Boolean);
   if (!parts.length) return { view: "home", id: null };
   if (parts[0] === "trip") return { view: "story", id: parts[1] ? decodeURIComponent(parts[1]) : null };
   if (["trips", "map", "about", "admin"].includes(parts[0])) return { view: parts[0], id: null };
   return { view: "home", id: null };
+}
+
+/** The path for a trip entry. */
+export function tripPath(id) {
+  return `/trip/${encodeURIComponent(id)}`;
 }
 
 export function photoUrl(apiBase, share, id, variant = "thumb") {
@@ -64,6 +74,8 @@ export function mapTrip(row, i) {
     body,
     quote: j.quote || "",
     caption: j.caption || "",
+    // The frames this entry shows. Empty = show the whole album.
+    photoIds: Array.isArray(j.photos) ? j.photos : [],
   };
 }
 
@@ -71,9 +83,17 @@ export function mapTrip(row, i) {
  * Splits an album's media into the slots the story layout needs. Videos are
  * kept out of the big editorial frames (their `thumb` is only a poster) but
  * stay in the gallery, badged.
+ *
+ * `selected` is the entry's curated frame list (journal.photos): an album is a
+ * whole shoot, an entry is an edit of it. Given one, the entry shows exactly
+ * those, in that order — a selected-but-since-deleted photo just drops out.
+ * Empty means uncurated, and the whole album shows.
  */
-export function pickPhotos(media) {
-  const all = Array.isArray(media) ? media : [];
+export function pickPhotos(media, selected) {
+  const media_ = Array.isArray(media) ? media : [];
+  const ids = Array.isArray(selected) ? selected : [];
+  const byId = new Map(media_.map((m) => [m.id, m]));
+  const all = ids.length ? ids.map((id) => byId.get(id)).filter(Boolean) : media_;
   const stills = all.filter((m) => (m.mediaType || "photo") !== "video");
   return {
     cover: stills[0] || all[0] || null,
@@ -98,7 +118,12 @@ const el = (id) => document.getElementById(id);
 export const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const slots = (t) => pickPhotos(ALBUMS.get(t?.id)?.photos);
+const slots = (t) => pickPhotos(ALBUMS.get(t?.id)?.photos, t?.photoIds);
+
+// The album's own cover only stands in while the entry is uncurated — once
+// frames are picked, the first pick leads, or the album cover would show a
+// photo the owner deliberately left out of the entry.
+const coverIdOf = (t) => (t.photoIds?.length ? t.photoIds[0] : t.coverPhotoId);
 
 /** A photo container, by photo id. A null id renders the labelled placeholder. */
 function frame(t, id, hint, variant = "original") {
@@ -120,7 +145,7 @@ function emptyState() {
         : "Nothing has been published here yet. Check back soon."}
     </p>
     <div style="display:flex;gap:12px;margin:32px 0 0;flex-wrap:wrap">
-      <a class="btn btn-ghost" href="#/">Back to the front <span class="ico" style="font-size:17px">arrow_forward</span></a>
+      <a class="btn btn-ghost" href="/">Back to the front <span class="ico" style="font-size:17px">arrow_forward</span></a>
     </div>
   </div>
 </div>`;
@@ -136,7 +161,7 @@ function viewHome() {
 <div class="view">
   <section class="hero">
     ${hero.map((t, i) => `
-      <div class="hero-slide${i === slide ? " on" : ""}">${frame(t, t.coverPhotoId, `${t.marker} — hero frame`)}</div>`).join("")}
+      <div class="hero-slide${i === slide ? " on" : ""}">${frame(t, coverIdOf(t), `${t.marker} — hero frame`)}</div>`).join("")}
     <div class="hero-scrim"></div>
     <div class="hero-copy">
       <div>
@@ -145,8 +170,8 @@ function viewHome() {
         <h1>${s.headline}</h1>
         <p>${esc(s.intro)}</p>
         <div class="hero-cta">
-          <a class="btn btn-primary" href="#/trips">Browse the trips <span class="ico" style="font-size:18px">arrow_forward</span></a>
-          <a class="btn btn-ghost" href="#/map">Open the map</a>
+          <a class="btn btn-primary" href="/trips">Browse the trips <span class="ico" style="font-size:18px">arrow_forward</span></a>
+          <a class="btn btn-ghost" href="/map">Open the map</a>
         </div>
       </div>
     </div>
@@ -169,8 +194,8 @@ function viewHome() {
 
   <section class="reel">
     ${TRIPS.map((t) => `
-      <a class="reel-item" data-reveal href="#/trip/${encodeURIComponent(t.id)}">
-        ${frame(t, t.coverPhotoId, `${t.marker} — cover frame`)}
+      <a class="reel-item" data-reveal href="${tripPath(t.id)}">
+        ${frame(t, coverIdOf(t), `${t.marker} — cover frame`)}
         <div class="reel-copy">
           <div class="rule"><span>${esc(t.num)}</span><i></i><span>${esc(t.date)}</span></div>
           <h3>${esc(t.title)}</h3>
@@ -183,7 +208,7 @@ function viewHome() {
   <section class="closer" data-reveal>
     <div class="kicker">Everywhere else</div>
     <h2>The archive covers more ground than the journal does.</h2>
-    <a class="btn btn-ghost" style="margin-top:28px" href="#/map">See the map <span class="ico" style="font-size:17px">public</span></a>
+    <a class="btn btn-ghost" style="margin-top:28px" href="/map">See the map <span class="ico" style="font-size:17px">public</span></a>
   </section>
 </div>`;
 }
@@ -197,7 +222,7 @@ function viewTrips() {
     <h1>Trips</h1>
     <div class="hairline"></div>
     ${TRIPS.map((t) => `
-      <a class="row" data-reveal href="#/trip/${encodeURIComponent(t.id)}">
+      <a class="row" data-reveal href="${tripPath(t.id)}">
         <span class="n">${esc(t.num)}</span>
         <div>
           <div class="t">${esc(t.title)}</div>
@@ -221,7 +246,7 @@ function viewStory(id) {
   return `
 <div class="view">
   <section class="story-hero">
-    ${frame(t, p.cover?.id || t.coverPhotoId, `${t.marker} — wide establishing frame`)}
+    ${frame(t, p.cover?.id || coverIdOf(t), `${t.marker} — wide establishing frame`)}
     <div class="story-copy">
       <div class="rule"><span>${esc(t.num)}</span><i></i><span>${esc(t.date)}</span>${t.coords ? `<i></i><span>${esc(t.coords)}</span>` : ""}</div>
       <h1>${esc(t.title)}</h1>
@@ -269,7 +294,7 @@ function viewStory(id) {
     </div>
   </section>` : ""}
 
-  <a class="next" data-reveal href="#/trip/${encodeURIComponent(next.id)}">
+  <a class="next" data-reveal href="${tripPath(next.id)}">
     <div>
       <div>
         <div class="kicker">Next entry</div>
@@ -294,12 +319,12 @@ function viewMap() {
       <p style="margin:0;font-size:15px;line-height:1.7;color:var(--muted);text-wrap:pretty">${TRIPS.length} ${TRIPS.length === 1 ? "entry" : "entries"} so far. Click a marker to read the one attached to it.</p>
     </div>
   </div>
-  <div class="map-shell"><div><iframe src="map.html" title="Map of destinations" loading="lazy"></iframe></div></div>
+  <div class="map-shell"><div><iframe src="/map.html" title="Map of destinations" loading="lazy"></iframe></div></div>
   <div style="padding:56px 6vw 120px">
     <div style="max-width:1320px;margin:0 auto">
       <div class="tiles">
         ${TRIPS.map((t) => `
-          <a class="tile" href="#/trip/${encodeURIComponent(t.id)}">
+          <a class="tile" href="${tripPath(t.id)}">
             <div class="c">${esc(t.coords || "No pin set")}</div>
             <div class="p">${esc(t.place)}</div>
             <div class="t">${esc(t.title)}</div>
@@ -326,7 +351,7 @@ function viewAbout() {
       </div>
       <div style="display:flex;gap:12px;margin:36px 0 0;flex-wrap:wrap">
         <a class="btn btn-primary" href="mailto:${esc(CFG.site.email)}">Get in touch <span class="ico" style="font-size:17px">mail</span></a>
-        <a class="btn btn-ghost" href="#/trips">Back to the trips</a>
+        <a class="btn btn-ghost" href="/trips">Back to the trips</a>
       </div>
     </div>
   </div>
@@ -438,26 +463,58 @@ async function show() {
   }
 }
 
-function onHash() {
-  route = routeOf(location.hash);
+/** Client-side navigation. */
+export function navigate(path, { replace = false } = {}) {
+  if (replace) history.replaceState({}, "", path);
+  else history.pushState({}, "", path);
+  onRoute();
+}
+
+function onRoute() {
+  route = routeOf(location.pathname);
   show();
   scrollTo({ top: 0, behavior: "auto" });
 }
 
+// Intercept plain left-clicks on in-app links so they route without a reload.
+// Anything the browser would treat specially — new tab, download, another
+// origin, a modifier held — is left alone, as is any path with a file
+// extension (/map.html is a real document).
+function interceptLinks(e) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest("a");
+  if (!a || a.target || a.hasAttribute("download") || a.origin !== location.origin) return;
+  if (a.pathname.includes(".")) return;
+  e.preventDefault();
+  const path = a.pathname + a.search;
+  if (path !== location.pathname + location.search) navigate(path);
+  else scrollTo({ top: 0, behavior: "smooth" });
+}
+
 async function boot() {
-  CFG = await (await fetch("config.json")).json();
-  route = routeOf(location.hash);
+  CFG = await (await fetch("/config.json")).json();
+
+  // Links shared while the site was hash-routed still land in the right place.
+  if (location.hash.startsWith("#/")) {
+    history.replaceState({}, "", location.hash.slice(1) || "/");
+  }
+
+  route = routeOf(location.pathname);
   await loadTrips();
   await show();
 
-  addEventListener("hashchange", onHash);
+  addEventListener("popstate", onRoute);
   addEventListener("click", (e) => {
     const pick = e.target.closest("[data-pick]");
-    if (pick) setSlide(Number(pick.dataset.pick));
+    if (pick) {
+      setSlide(Number(pick.dataset.pick));
+      return;
+    }
+    interceptLinks(e);
   });
   // map.html posts the trip id when a marker is clicked
   addEventListener("message", (e) => {
-    if (e.data?.type === "trip") location.hash = `#/trip/${encodeURIComponent(e.data.id)}`;
+    if (e.data?.type === "trip") navigate(tripPath(e.data.id));
   });
 }
 

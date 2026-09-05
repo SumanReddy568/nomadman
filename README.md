@@ -8,7 +8,7 @@ Design source: the Claude Design canvas in `design/` (`Nomadman.dc.html`, `map.h
 That's the mockup — `public/` is the implementation.
 
 ```
-wrangler.toml   static-assets Worker: uploads public/, no server code
+wrangler.toml   static-assets Worker: uploads public/, SPA fallback for routes
 public/
   index.html    shell: nav, <main>, footer
   app.js        router + the public views (home, trips, story, map, about)
@@ -36,15 +36,16 @@ is ever copied here.
 | `GET {apiBase}/share/{token}/zip` | "Download all" | none |
 | `POST {apiBase}/login` | the editor | — |
 | `GET/POST/PATCH {apiBase}/photos/api/albums` | the editor | bearer |
+| `POST {apiBase}/photos/api/albums/:id/journal/draft` | AI entry drafting | bearer (super) |
 
 Per trip the site takes the first still as the cover/hero, the next as the
 full-bleed frame, the next two as the detail pair, and shows **every** frame
 (videos included, badged) in the gallery grid at the foot of the entry.
 
-## The editor (`#/admin`)
+## The editor (`/admin`)
 
 **One editor, and it isn't linked from anywhere public.** Reach it by typing
-`#/admin`. Sign in with the same account as the photo library — there's no
+`/admin`. Sign in with the same account as the photo library — there's no
 separate password and no backend of its own; nomadman calls the worker's
 existing `/login` and album APIs straight from the browser.
 
@@ -56,6 +57,13 @@ share it and never enough to put it on this front page.
 
 - **In the journal** — the toggle that publishes an album. That's the sync.
 - **Order / Date label / home hero** — where it sits and how it's captioned.
+- **Frames in this entry** — an album is the whole shoot; an entry is an edit
+  of it. Pick the frames this entry shows and the first pick leads. Pick
+  nothing and the whole album shows, which is what entries published before
+  this existed keep doing.
+- **✨ Draft with AI** — reads up to the first six chosen frames and writes the
+  prose from what's actually in them. It fills the form; it never saves. Your
+  order, hero and date label are left alone.
 - **Lede, entry, pull quote, caption** — the writing. Blank lines split
   paragraphs. Left empty, the album's own description becomes the lede.
 - **+ New trip** — creates an S3-backed album; upload into it at `/photos`.
@@ -70,6 +78,10 @@ are, the journal renders its empty state:
 
 - `GET /journal/api/trips`, the public trip feed (new).
 - The super-user gate on publishing (`PATCH .../albums/:id` with `journal`).
+- The AI drafting endpoint, which reuses the worker's existing Gemini +
+  OpenRouter provider layer (`src/open-api/ai.js`). Vision needs Gemini, so
+  drafting requires `GEMINI_API_KEY`; it does **not** consume the free-credit
+  pool, which meters extension users rather than the journal owner.
 - CORS + preflight on the owner API (`/photos/api/*`), without which the
   editor can't sign in from this origin. The worker's `JOURNAL_ORIGINS` var
   lists the allowed origins — **serving this site from a custom domain means

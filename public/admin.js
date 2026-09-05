@@ -1,4 +1,4 @@
-// The journal editor. Loaded on demand by app.js when the route is #/admin,
+// The journal editor. Loaded on demand by app.js when the route is /admin,
 // so the public site never pays for it.
 //
 // There is no backend here. This talks straight to open-api-worker with the
@@ -27,6 +27,13 @@ let albums = [];
 let isSuper = null; // null = not checked yet
 let error = "";
 let busy = false;
+// albumId -> full album (with its photo list), fetched when a card needs the
+// frame picker. The list endpoint doesn't carry photos.
+const DETAIL = new Map();
+// albumId -> Set(photoId) being edited, so a click repaints instantly instead
+// of waiting for a save.
+const PICKED = new Map();
+let drafting = null; // albumId currently waiting on the model
 
 const token = () => localStorage.getItem(TOKEN_KEY) || "";
 const account = () => localStorage.getItem(EMAIL_KEY) || "";
@@ -44,6 +51,12 @@ export function splitParas(text) {
 /** body[] -> textarea. Inverse of splitParas for text that round-trips. */
 export function joinParas(list) {
   return (Array.isArray(list) ? list : []).join("\n\n");
+}
+
+/** Ordered selection -> the list stored as journal.photos (display order). */
+export function orderedSelection(albumPhotos, picked) {
+  const chosen = picked instanceof Set ? picked : new Set(picked || []);
+  return (albumPhotos || []).map((p) => p.id).filter((id) => chosen.has(id));
 }
 
 /** Next free rank, so a newly published trip lands at the end of the journal. */
@@ -171,12 +184,64 @@ function albumCard(a) {
     <label>Entry — blank line between paragraphs<textarea data-f="body" rows="7" placeholder="It does hard light, and then it does none…">${esc(joinParas(j.body))}</textarea></label>
     <label>Pull quote<textarea data-f="quote" rows="2">${esc(j.quote || "")}</textarea></label>
     <label>Caption under the detail pair<input type="text" data-f="caption" value="${esc(j.caption || "")}"></label>
+    ${pickerBlock(a)}
     <div class="adm-row end">
       <span class="adm-saved" hidden>Saved</span>
       <button class="btn btn-primary sm" data-save>Save entry</button>
     </div>
   </div>` : ""}
 </div>`;
+}
+
+// The frame picker. An album is the whole shoot; the entry is an edit of it.
+// Nothing picked = the entry shows the whole album, which is what entries
+// published before this existed keep doing.
+function pickerBlock(a) {
+  const detail = DETAIL.get(a.id);
+  if (!detail) {
+    return `<div class="adm-picker"><button class="btn btn-ghost sm" data-load-photos>Choose which frames appear…</button></div>`;
+  }
+  const photos = detail.photos || [];
+  // Thumbs here load through the share link (an <img> can't send a bearer
+  // token), so with the link off the picker would be a grid of blanks.
+  if (!a.shareEnabled) {
+    return `<div class="adm-picker"><div class="adm-meta">Turn the album's public link on to choose frames.</div></div>`;
+  }
+  if (!photos.length) {
+    return `<div class="adm-picker"><div class="adm-meta">No photos in this album yet — add some, then pick the ones this entry shows.</div></div>`;
+  }
+  const picked = PICKED.get(a.id) || new Set();
+  const n = picked.size;
+  return `
+  <div class="adm-picker">
+    <div class="adm-picker-head">
+      <div>
+        <div class="adm-picker-title">Frames in this entry</div>
+        <div class="adm-meta">${n ? `${n} of ${photos.length} chosen` : `nothing chosen — the entry shows all ${photos.length}`}</div>
+      </div>
+      <div class="adm-card-actions">
+        <button class="btn btn-ghost sm" data-pick-none ${n ? "" : "disabled"}>Clear</button>
+        <button class="btn btn-ghost sm" data-draft ${n && drafting !== a.id ? "" : "disabled"}>
+          ${drafting === a.id ? "Reading the photos…" : "✨ Draft with AI"}
+        </button>
+      </div>
+    </div>
+    <div class="adm-meta" style="margin:2px 0 10px">
+      The first chosen frame leads the entry. AI drafting reads up to the first
+      six and writes over the fields above.
+    </div>
+    <div class="adm-thumbs">
+      ${photos.map((ph) => {
+        const on = picked.has(ph.id);
+        const order = on ? orderedSelection(photos, picked).indexOf(ph.id) + 1 : 0;
+        return `
+        <button type="button" class="adm-thumb${on ? " on" : ""}" data-pick-photo="${esc(ph.id)}" title="${esc(ph.filename || "")}">
+          <img src="${esc(CFG.apiBase)}/share/${encodeURIComponent(a.shareToken)}/photos/${encodeURIComponent(ph.id)}/thumb" alt="${esc(ph.filename || "Frame")}" loading="lazy">
+          ${on ? `<span class="adm-thumb-n">${order}</span>` : ""}
+        </button>`;
+      }).join("")}
+    </div>
+  </div>`;
 }
 
 function editorView() {
@@ -217,6 +282,7 @@ function editorView() {
 // ── wiring ─────────────────────────────────────────────────────────
 
 function cardBody(card) {
+  const id = card.dataset.album;
   const get = (f) => card.querySelector(`[data-f="${f}"]`);
   return {
     rank: Number(get("rank")?.value ?? 9999),
@@ -226,6 +292,11 @@ function cardBody(card) {
     body: splitParas(get("body")?.value),
     quote: get("quote")?.value || null,
     caption: get("caption")?.value || null,
+    // Curated frames, in album order. Untouched pickers keep whatever was
+    // already stored rather than silently clearing the selection.
+    photos: PICKED.has(id)
+      ? orderedSelection(DETAIL.get(id)?.photos, PICKED.get(id))
+      : (albums.find((a) => a.id === id)?.journal?.photos || []),
   };
 }
 
@@ -266,6 +337,62 @@ function wireEditor(root) {
         const journal = e.target.checked ? { rank: nextRank(albums), body: [] } : null;
         await patchAlbum(id, { journal });
         await refresh();
+      }));
+
+    // Photos aren't in the album LIST response, so the picker fetches them the
+    // first time it's opened, then seeds the selection from what's stored.
+    card.querySelector("[data-load-photos]")?.addEventListener("click", () =>
+      withError(async () => {
+        const detail = await api(`/photos/api/albums/${encodeURIComponent(id)}`);
+        DETAIL.set(id, detail);
+        const stored = albums.find((a) => a.id === id)?.journal?.photos || [];
+        PICKED.set(id, new Set(stored));
+      }));
+
+    card.querySelectorAll("[data-pick-photo]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const set = PICKED.get(id) || new Set();
+        const photoId = btn.dataset.pickPhoto;
+        if (set.has(photoId)) set.delete(photoId);
+        else set.add(photoId);
+        PICKED.set(id, set);
+        renderAdmin(); // repaint the numbering + the draft button's state
+      });
+    });
+
+    card.querySelector("[data-pick-none]")?.addEventListener("click", () => {
+      PICKED.set(id, new Set());
+      renderAdmin();
+    });
+
+    // Draft the entry from the chosen frames. The result only fills the form —
+    // it is never saved for you.
+    card.querySelector("[data-draft]")?.addEventListener("click", () =>
+      withError(async () => {
+        const photos = DETAIL.get(id)?.photos || [];
+        const photoIds = orderedSelection(photos, PICKED.get(id));
+        drafting = id;
+        await renderAdmin();
+        try {
+          const res = await api(`/photos/api/albums/${encodeURIComponent(id)}/journal/draft`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ photoIds }),
+          });
+          const album = albums.find((a) => a.id === id);
+          const d = res.draft || {};
+          // Keep rank/hero/date — those are the owner's layout decisions, not
+          // the model's. Only the prose is replaced.
+          album.journal = {
+            ...album.journal,
+            lede: d.lede,
+            body: d.body,
+            quote: d.quote,
+            caption: d.caption,
+          };
+        } finally {
+          drafting = null;
+        }
       }));
 
     card.querySelector("[data-enable-share]")?.addEventListener("click", () =>

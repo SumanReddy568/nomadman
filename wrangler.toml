@@ -7,6 +7,15 @@ account_id = "149585afc77fbfb3dfdf5b43646fb8ca"
 
 [assets]
 directory = "./public"
+# Real paths (/trips, /trip/<id>, /admin) instead of #/ hashes: any path that
+# isn't a file in public/ serves index.html and the client router takes over.
+# Everything index.html references must therefore be root-absolute ("/app.js",
+# not "app.js") — a relative one would resolve against /trip/<id> and 404.
+not_found_handling = "single-page-application"
+# Serve .html files at their literal path. The default ("auto-trailing-slash")
+# redirects /map.html -> /map, which is one of the routes above — the map
+# iframe would have loaded the whole site inside itself.
+html_handling = "none"
 
 [observability]
 enabled = true

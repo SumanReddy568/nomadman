@@ -2,20 +2,29 @@
 // Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { routeOf, photoUrl, pickPhotos, fmtCoords, mapTrip } from "./public/app.js";
-import { splitParas, joinParas, nextRank } from "./public/admin.js";
+import { routeOf, tripPath, photoUrl, pickPhotos, fmtCoords, mapTrip } from "./public/app.js";
+import { splitParas, joinParas, nextRank, orderedSelection } from "./public/admin.js";
 
-test("routeOf maps every hash to a view", () => {
+test("routeOf maps every path to a view", () => {
+  assert.deepEqual(routeOf("/"), { view: "home", id: null });
   assert.deepEqual(routeOf(""), { view: "home", id: null });
-  assert.deepEqual(routeOf("#/"), { view: "home", id: null });
-  assert.deepEqual(routeOf("#/trips"), { view: "trips", id: null });
-  assert.deepEqual(routeOf("#/map"), { view: "map", id: null });
-  assert.deepEqual(routeOf("#/about"), { view: "about", id: null });
-  assert.deepEqual(routeOf("#/admin"), { view: "admin", id: null });
-  assert.deepEqual(routeOf("#/trip/kyoto"), { view: "story", id: "kyoto" });
-  assert.deepEqual(routeOf("#/trip/torres%20del%20paine"), { view: "story", id: "torres del paine" });
-  // unknown routes fall back home rather than rendering nothing
-  assert.deepEqual(routeOf("#/nope"), { view: "home", id: null });
+  assert.deepEqual(routeOf("/trips"), { view: "trips", id: null });
+  assert.deepEqual(routeOf("/map"), { view: "map", id: null });
+  assert.deepEqual(routeOf("/about"), { view: "about", id: null });
+  assert.deepEqual(routeOf("/admin"), { view: "admin", id: null });
+  assert.deepEqual(routeOf("/trip/kyoto"), { view: "story", id: "kyoto" });
+  assert.deepEqual(routeOf("/trip/torres%20del%20paine"), { view: "story", id: "torres del paine" });
+  // a query string is not part of the route
+  assert.deepEqual(routeOf("/trips?from=map"), { view: "trips", id: null });
+  // trailing slashes and unknown routes fall back rather than rendering nothing
+  assert.deepEqual(routeOf("/trips/"), { view: "trips", id: null });
+  assert.deepEqual(routeOf("/nope"), { view: "home", id: null });
+});
+
+test("tripPath round-trips through routeOf", () => {
+  assert.equal(tripPath("kyoto"), "/trip/kyoto");
+  const weird = "a b/c?d";
+  assert.deepEqual(routeOf(tripPath(weird)), { view: "story", id: weird });
 });
 
 test("photoUrl escapes the token and id", () => {
@@ -120,4 +129,34 @@ test("nextRank puts a newly published trip last", () => {
   // unpublished albums and garbage ranks are ignored, not counted as 0
   assert.equal(nextRank([{ journal: null }, { journal: { rank: 2 } }, {}]), 3);
   assert.equal(nextRank([{ journal: { rank: undefined } }]), 1);
+});
+
+test("pickPhotos honours the entry's curated frame list", () => {
+  const media = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }, { id: "e" }];
+  // curated: exactly those, in the order the owner picked them
+  const p = pickPhotos(media, ["d", "b", "a"]);
+  assert.equal(p.cover.id, "d");
+  assert.equal(p.bleed.id, "b");
+  assert.deepEqual(p.all.map((m) => m.id), ["d", "b", "a"], "uncurated frames stay out");
+
+  // an empty list means uncurated — show the whole album
+  assert.equal(pickPhotos(media, []).all.length, 5);
+  assert.equal(pickPhotos(media, undefined).all.length, 5);
+
+  // a picked photo that has since been deleted just drops out
+  assert.deepEqual(pickPhotos(media, ["a", "gone", "c"]).all.map((m) => m.id), ["a", "c"]);
+});
+
+test("mapTrip carries the curated frame list", () => {
+  assert.deepEqual(mapTrip({ id: "x", journal: { rank: 1, photos: ["p2", "p1"] } }, 0).photoIds, ["p2", "p1"]);
+  assert.deepEqual(mapTrip({ id: "x", journal: { rank: 1 } }, 0).photoIds, []);
+});
+
+test("orderedSelection returns album order, not click order", () => {
+  const photos = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  // clicked c then a — stored in album order so the entry reads chronologically
+  assert.deepEqual(orderedSelection(photos, new Set(["c", "a"])), ["a", "c"]);
+  assert.deepEqual(orderedSelection(photos, new Set()), []);
+  assert.deepEqual(orderedSelection(photos, ["b"]), ["b"]);
+  assert.deepEqual(orderedSelection(undefined, new Set(["a"])), []);
 });
