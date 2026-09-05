@@ -70,6 +70,10 @@ are, the journal renders its empty state:
 
 - `GET /journal/api/trips`, the public trip feed (new).
 - The super-user gate on publishing (`PATCH .../albums/:id` with `journal`).
+- CORS + preflight on the owner API (`/photos/api/*`), without which the
+  editor can't sign in from this origin. The worker's `JOURNAL_ORIGINS` var
+  lists the allowed origins — **serving this site from a custom domain means
+  adding that domain there**, or the editor gets a CORS error.
 - `Access-Control-Allow-Origin: *` on `GET /share/:token/api/album`, so the
   album JSON can be read cross-origin. Both endpoints were already public and
   forwardable, so neither exposes anything new.
