@@ -1,20 +1,30 @@
 {
   "apiBase": "https://open-api-worker.sumanreddy568.workers.dev",
   "site": {
-    "kicker": "Photographs from the road",
-    "headline": "I keep going back<br>for the light.",
-    "intro": "This is the archive. Every frame here has a story attached, and I wrote most of them down while my hands were still cold.",
-    "recentNote": "I shoot slowly. Two or three rolls a week, mostly at the edges of the day, mostly alone.",
+    "kicker": "Notes from the saddle",
+    "headline": "I ride until<br>the road runs out.",
+    "intro": "This is the archive \u2014 the passes, the punctures, the roadside chai at altitude. Most of these notes were written with the engine still ticking as it cooled.",
+    "recentNote": "I ride slowly and stop often. Most of what's here was shot from the shoulder of a road I had no particular reason to pull over on.",
     "email": "hello@nomadman.photo",
     "about": {
       "portraitShare": "",
       "portraitIndex": 0,
       "headline": "I take the long way around.",
-      "p1": "I started carrying a camera because I kept forgetting the good parts. This site is my attempt at giving the better frames somewhere to live, with the notes I wrote next to them.",
-      "p2": "I shoot digital for work and film when I am travelling for myself. Mostly one body, one 35mm lens. If a frame needed a second lens, it probably needed a second trip instead.",
+      "p1": "I started carrying a camera because the good parts of a ride are the ones you can't describe afterwards \u2014 the ten minutes of light on a pass, the shape of a road you'll never take again. This site is where those frames live, with the notes I made next to them.",
+      "p2": "One bike, one tank bag, one lens. If a shot needed a second lens it probably needed a second ride instead, and that's rarely a problem.",
       "stats": [
-        { "value": "35mm", "label": "Almost always" },
-        { "value": "Film", "label": "When travelling" }
+        {
+          "value": "Solo",
+          "label": "Mostly"
+        },
+        {
+          "value": "35mm",
+          "label": "One lens"
+        },
+        {
+          "value": "No plan",
+          "label": "By design"
+        }
       ]
     }
   }

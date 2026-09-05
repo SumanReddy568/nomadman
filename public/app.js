@@ -382,10 +382,17 @@ export function afterRender(viewName = route.view) {
     else a.removeAttribute("aria-current");
   });
 
-  // Fade each frame in once its bytes land (avoids a grey-to-photo pop).
+  // Fade each frame in once its bytes land (avoids a grey-to-photo pop), and
+  // flag portrait sources. The layout was drawn for landscape frames; a phone
+  // photo in a 2.9:1 band gets cropped to a sliver, so those containers grow
+  // (see :has(img.is-portrait) in styles.css).
+  const markShape = (img) => {
+    img.classList.add("on");
+    if (img.naturalHeight > img.naturalWidth * 1.1) img.classList.add("is-portrait");
+  };
   document.querySelectorAll(".frame img").forEach((img) => {
-    if (img.complete && img.naturalWidth) img.classList.add("on");
-    else img.addEventListener("load", () => img.classList.add("on"), { once: true });
+    if (img.complete && img.naturalWidth) markShape(img);
+    else img.addEventListener("load", () => markShape(img), { once: true });
     img.addEventListener("error", () => img.closest(".frame")?.classList.add("empty"), { once: true });
   });
 

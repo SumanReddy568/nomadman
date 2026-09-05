@@ -310,3 +310,14 @@ main { flex: 1 0 auto; }
 .adm-seq-item:active { cursor: grabbing; }
 .adm-seq-item.dragging { opacity: .4; }
 .adm-seq-item.over .adm-seq-frame { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.35); }
+
+/* ── portrait sources ───────────────────────────────────────────── */
+/* The layout was drawn around landscape frames. A 9:16 phone photo in a wide
+   band is cropped to a sliver, so the containers that hold one full-bleed
+   frame grow to give it room. Marked in app.js from the image's natural size. */
+.reel-item:has(img.is-portrait) { height: clamp(460px, 86vh, 820px); }
+.bleed:has(img.is-portrait) { height: clamp(460px, 92vh, 900px); }
+.story-hero:has(img.is-portrait) { height: 92vh; }
+@media (max-width: 860px) {
+  .reel-item:has(img.is-portrait) { height: 74vh; }
+}
