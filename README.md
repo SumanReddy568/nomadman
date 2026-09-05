@@ -58,12 +58,15 @@ share it and never enough to put it on this front page.
 - **In the journal** — the toggle that publishes an album. That's the sync.
 - **Order / Date label / home hero** — where it sits and how it's captioned.
 - **Frames in this entry** — an album is the whole shoot; an entry is an edit
-  of it. Pick the frames this entry shows and the first pick leads. Pick
-  nothing and the whole album shows, which is what entries published before
-  this existed keep doing.
-- **✨ Draft with AI** — reads up to the first six chosen frames and writes the
-  prose from what's actually in them. It fills the form; it never saves. Your
-  order, hero and date label are left alone.
+  of it. Pick the frames this entry shows. Pick nothing and the whole album
+  shows, which is what entries published before this existed keep doing.
+  **Their order is the layout**: 1 is the cover and home hero, 2 runs full
+  width, 3 and 4 are the detail pair, the rest fill the grid. Hand-picking
+  stays in date order until something reorders it; "Date order" puts it back.
+- **✨ Draft with AI** — reads up to the first six chosen frames, writes the
+  prose from what's actually in them, and **resequences them** — which frame
+  leads, which runs full width, which two pair up. It fills the form; it never
+  saves. Rank, hero and date label are left alone.
 - **Lede, entry, pull quote, caption** — the writing. Blank lines split
   paragraphs. Left empty, the album's own description becomes the lede.
 - **+ New trip** — creates an S3-backed album; upload into it at `/photos`.

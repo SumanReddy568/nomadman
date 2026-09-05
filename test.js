@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { routeOf, tripPath, photoUrl, pickPhotos, fmtCoords, mapTrip } from "./public/app.js";
-import { splitParas, joinParas, nextRank, orderedSelection } from "./public/admin.js";
+import { splitParas, joinParas, nextRank, togglePick, dateOrder, cleanSelection, mergeDraftOrder } from "./public/admin.js";
 
 test("routeOf maps every path to a view", () => {
   assert.deepEqual(routeOf("/"), { view: "home", id: null });
@@ -152,11 +152,41 @@ test("mapTrip carries the curated frame list", () => {
   assert.deepEqual(mapTrip({ id: "x", journal: { rank: 1 } }, 0).photoIds, []);
 });
 
-test("orderedSelection returns album order, not click order", () => {
+test("togglePick keeps hand-picking chronological", () => {
+  const photos = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+  // clicked c then a — 'a' lands before 'c', not appended after it
+  let sel = togglePick(photos, [], "c");
+  sel = togglePick(photos, sel, "a");
+  assert.deepEqual(sel, ["a", "c"]);
+  sel = togglePick(photos, sel, "d");
+  assert.deepEqual(sel, ["a", "c", "d"]);
+  // clicking again removes
+  assert.deepEqual(togglePick(photos, sel, "c"), ["a", "d"]);
+  assert.deepEqual(togglePick(photos, undefined, "b"), ["b"]);
+});
+
+test("an AI sequence survives further hand-picking", () => {
+  const photos = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+  // the model put 'c' first — adding 'b' must not re-sort 'c' back behind it
+  const sel = ["c", "a"];
+  assert.deepEqual(togglePick(photos, sel, "b")[0], "c", "the cover stays the cover");
+});
+
+test("dateOrder restores album order, cleanSelection drops deleted frames", () => {
   const photos = [{ id: "a" }, { id: "b" }, { id: "c" }];
-  // clicked c then a — stored in album order so the entry reads chronologically
-  assert.deepEqual(orderedSelection(photos, new Set(["c", "a"])), ["a", "c"]);
-  assert.deepEqual(orderedSelection(photos, new Set()), []);
-  assert.deepEqual(orderedSelection(photos, ["b"]), ["b"]);
-  assert.deepEqual(orderedSelection(undefined, new Set(["a"])), []);
+  assert.deepEqual(dateOrder(photos, ["c", "a"]), ["a", "c"]);
+  assert.deepEqual(dateOrder(photos, []), []);
+  assert.deepEqual(dateOrder(undefined, ["a"]), []);
+  assert.deepEqual(cleanSelection(photos, ["c", "gone", "a"]), ["c", "a"], "order preserved");
+  assert.deepEqual(cleanSelection(photos, undefined), []);
+});
+
+test("mergeDraftOrder leads with the model's sequence, keeps the rest", () => {
+  // the model only saw the first few; the others stay selected behind them
+  assert.deepEqual(mergeDraftOrder(["a", "b", "c", "d"], ["c", "a"]), ["c", "a", "b", "d"]);
+  assert.deepEqual(mergeDraftOrder(["a", "b"], []), ["a", "b"]);
+  assert.deepEqual(mergeDraftOrder(["a", "b"], undefined), ["a", "b"]);
+  // ids it invented (or that were since deselected) are ignored
+  assert.deepEqual(mergeDraftOrder(["a", "b"], ["zz", "b"]), ["b", "a"]);
+  assert.deepEqual(mergeDraftOrder(undefined, ["a"]), []);
 });

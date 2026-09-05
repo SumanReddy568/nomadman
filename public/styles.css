@@ -286,3 +286,9 @@ main { flex: 1 0 auto; }
   background: var(--accent); color: #fff; font-family: var(--mono); font-size: 10.5px;
 }
 .btn:disabled { opacity: .45; cursor: default; }
+.adm-thumb-slot {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 4px;
+  background: linear-gradient(180deg, transparent, rgba(13,19,32,.9));
+  font-family: var(--mono); font-size: 9px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent-pale);
+}

@@ -30,8 +30,8 @@ let busy = false;
 // albumId -> full album (with its photo list), fetched when a card needs the
 // frame picker. The list endpoint doesn't carry photos.
 const DETAIL = new Map();
-// albumId -> Set(photoId) being edited, so a click repaints instantly instead
-// of waiting for a save.
+// albumId -> ordered [photoId] being edited, so a click repaints instantly
+// instead of waiting for a save. Order is the layout — see the helpers above.
 const PICKED = new Map();
 let drafting = null; // albumId currently waiting on the model
 
@@ -53,10 +53,56 @@ export function joinParas(list) {
   return (Array.isArray(list) ? list : []).join("\n\n");
 }
 
-/** Ordered selection -> the list stored as journal.photos (display order). */
-export function orderedSelection(albumPhotos, picked) {
-  const chosen = picked instanceof Set ? picked : new Set(picked || []);
+// The selection is an ORDERED list, not a set: its order is the layout. 1st
+// leads the entry and is its cover, 2nd is the full-width frame, 3rd and 4th
+// are the detail pair, the rest fill the grid. That's why AI sequencing and
+// manual picking both write to the same array.
+
+/** Drops ids no longer in the album (deleted photos), keeping order. */
+export function cleanSelection(albumPhotos, ids) {
+  const live = new Set((albumPhotos || []).map((p) => p.id));
+  return (ids || []).filter((id) => live.has(id));
+}
+
+/**
+ * Adds or removes one frame.
+ *
+ * While the selection is still in album order, adding inserts at the
+ * chronological position — hand-picking a trip shouldn't need manual sorting.
+ * Once it ISN'T (the model resequenced it, or "Date order" was never pressed
+ * after), that order is a deliberate layout, so a new frame appends rather
+ * than shoving itself in front of the chosen cover.
+ */
+export function togglePick(albumPhotos, current, id) {
+  const ids = current || [];
+  if (ids.includes(id)) return ids.filter((x) => x !== id);
+
+  const album = (albumPhotos || []).map((p) => p.id);
+  const rank = (x) => album.indexOf(x);
+  const inAlbumOrder = ids.every((x, i) => i === 0 || rank(ids[i - 1]) <= rank(x));
+  if (!inAlbumOrder) return [...ids, id];
+
+  const out = [...ids];
+  const before = out.findIndex((x) => rank(x) > rank(id));
+  if (before === -1) out.push(id);
+  else out.splice(before, 0, id);
+  return out;
+}
+
+/** Restores album (chronological) order for the current selection. */
+export function dateOrder(albumPhotos, ids) {
+  const chosen = new Set(ids || []);
   return (albumPhotos || []).map((p) => p.id).filter((id) => chosen.has(id));
+}
+
+/**
+ * The model only sequences the frames it was shown (the first few). Its order
+ * leads, anything else stays selected behind it.
+ */
+export function mergeDraftOrder(current, drafted) {
+  const cur = current || [];
+  const lead = (drafted || []).filter((id) => cur.includes(id));
+  return [...lead, ...cur.filter((id) => !lead.includes(id))];
 }
 
 /** Next free rank, so a newly published trip lands at the end of the journal. */
@@ -210,8 +256,9 @@ function pickerBlock(a) {
   if (!photos.length) {
     return `<div class="adm-picker"><div class="adm-meta">No photos in this album yet — add some, then pick the ones this entry shows.</div></div>`;
   }
-  const picked = PICKED.get(a.id) || new Set();
-  const n = picked.size;
+  const picked = PICKED.get(a.id) || [];
+  const n = picked.length;
+  const SLOT = ["Cover", "Full width", "Detail", "Detail"];
   return `
   <div class="adm-picker">
     <div class="adm-picker-head">
@@ -220,6 +267,7 @@ function pickerBlock(a) {
         <div class="adm-meta">${n ? `${n} of ${photos.length} chosen` : `nothing chosen — the entry shows all ${photos.length}`}</div>
       </div>
       <div class="adm-card-actions">
+        <button class="btn btn-ghost sm" data-pick-date ${n ? "" : "disabled"}>Date order</button>
         <button class="btn btn-ghost sm" data-pick-none ${n ? "" : "disabled"}>Clear</button>
         <button class="btn btn-ghost sm" data-draft ${n && drafting !== a.id ? "" : "disabled"}>
           ${drafting === a.id ? "Reading the photos…" : "✨ Draft with AI"}
@@ -227,17 +275,19 @@ function pickerBlock(a) {
       </div>
     </div>
     <div class="adm-meta" style="margin:2px 0 10px">
-      The first chosen frame leads the entry. AI drafting reads up to the first
-      six and writes over the fields above.
+      Order is the layout: 1 is the cover and home hero, 2 runs full width, 3
+      and 4 are the detail pair, the rest fill the grid. Drafting reads up to
+      the first six, rewrites the fields above and resequences them.
     </div>
     <div class="adm-thumbs">
       ${photos.map((ph) => {
-        const on = picked.has(ph.id);
-        const order = on ? orderedSelection(photos, picked).indexOf(ph.id) + 1 : 0;
+        const at = picked.indexOf(ph.id);
+        const on = at !== -1;
         return `
         <button type="button" class="adm-thumb${on ? " on" : ""}" data-pick-photo="${esc(ph.id)}" title="${esc(ph.filename || "")}">
           <img src="${esc(CFG.apiBase)}/share/${encodeURIComponent(a.shareToken)}/photos/${encodeURIComponent(ph.id)}/thumb" alt="${esc(ph.filename || "Frame")}" loading="lazy">
-          ${on ? `<span class="adm-thumb-n">${order}</span>` : ""}
+          ${on ? `<span class="adm-thumb-n">${at + 1}</span>` : ""}
+          ${on && at < SLOT.length ? `<span class="adm-thumb-slot">${SLOT[at]}</span>` : ""}
         </button>`;
       }).join("")}
     </div>
@@ -295,7 +345,7 @@ function cardBody(card) {
     // Curated frames, in album order. Untouched pickers keep whatever was
     // already stored rather than silently clearing the selection.
     photos: PICKED.has(id)
-      ? orderedSelection(DETAIL.get(id)?.photos, PICKED.get(id))
+      ? cleanSelection(DETAIL.get(id)?.photos, PICKED.get(id))
       : (albums.find((a) => a.id === id)?.journal?.photos || []),
   };
 }
@@ -346,22 +396,24 @@ function wireEditor(root) {
         const detail = await api(`/photos/api/albums/${encodeURIComponent(id)}`);
         DETAIL.set(id, detail);
         const stored = albums.find((a) => a.id === id)?.journal?.photos || [];
-        PICKED.set(id, new Set(stored));
+        PICKED.set(id, cleanSelection(detail.photos, stored));
       }));
 
     card.querySelectorAll("[data-pick-photo]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const set = PICKED.get(id) || new Set();
-        const photoId = btn.dataset.pickPhoto;
-        if (set.has(photoId)) set.delete(photoId);
-        else set.add(photoId);
-        PICKED.set(id, set);
+        const photos = DETAIL.get(id)?.photos || [];
+        PICKED.set(id, togglePick(photos, PICKED.get(id), btn.dataset.pickPhoto));
         renderAdmin(); // repaint the numbering + the draft button's state
       });
     });
 
     card.querySelector("[data-pick-none]")?.addEventListener("click", () => {
-      PICKED.set(id, new Set());
+      PICKED.set(id, []);
+      renderAdmin();
+    });
+
+    card.querySelector("[data-pick-date]")?.addEventListener("click", () => {
+      PICKED.set(id, dateOrder(DETAIL.get(id)?.photos, PICKED.get(id)));
       renderAdmin();
     });
 
@@ -369,8 +421,7 @@ function wireEditor(root) {
     // it is never saved for you.
     card.querySelector("[data-draft]")?.addEventListener("click", () =>
       withError(async () => {
-        const photos = DETAIL.get(id)?.photos || [];
-        const photoIds = orderedSelection(photos, PICKED.get(id));
+        const photoIds = cleanSelection(DETAIL.get(id)?.photos, PICKED.get(id));
         drafting = id;
         await renderAdmin();
         try {
@@ -390,6 +441,12 @@ function wireEditor(root) {
             quote: d.quote,
             caption: d.caption,
           };
+          // Its sequence is the layout decision: which frame is the cover, the
+          // full-width one, the detail pair. Frames it wasn't shown stay put
+          // behind them. Nothing is saved until "Save entry".
+          if (res.photos?.length) {
+            PICKED.set(id, mergeDraftOrder(PICKED.get(id), res.photos));
+          }
         } finally {
           drafting = null;
         }
