@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/designstack-browserstack-design-system-e-19b1e266-9441-4fd2-898c-312152c9eee6/colors_and_type.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..600,0..1,0&display=swap">
+<script src="_ds/designstack-browserstack-design-system-e-19b1e266-9441-4fd2-898c-312152c9eee6/_ds_bundle.js"></script>
+<script src="./image-slot.js"></script>
+<style>
+  html, body { margin: 0; background: #0d1320; color: #f9fafb; font-family: var(--font-sans); }
+  * { box-sizing: border-box; }
+  a { color: #93c5fd; text-decoration: none; }
+  a:hover { color: #dbeafe; }
+  ::selection { background: #1d4ed8; color: #fff; }
+  @keyframes viewIn { from { opacity: 0; transform: translateY(18px) scale(.994); } to { opacity: 1; transform: none; } }
+  @keyframes lift { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+  @keyframes kenburns { from { transform: scale(1.02) translate3d(0,0,0); } to { transform: scale(1.14) translate3d(-1.5%,-1%,0); } }
+  @keyframes cue { 0% { transform: translateY(0); opacity: .25 } 45% { transform: translateY(9px); opacity: 1 } 100% { transform: translateY(0); opacity: .25 } }
+  @keyframes hair { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#0d1320;overflow-x:hidden">
+
+  <div style="position:fixed;top:0;left:0;right:0;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 28px;background:linear-gradient(180deg,rgba(13,19,32,.92),rgba(13,19,32,0))">
+    <div onClick="{{ goHome }}" style="display:flex;align-items:baseline;gap:10px;cursor:pointer">
+      <span style="font-size:15px;font-weight:600;letter-spacing:-0.01em;color:#f9fafb">Nomadman</span>
+      <span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;color:#6b7280;text-transform:uppercase">photo journal</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div onClick="{{ goHome }}" style="position:relative;padding:8px 12px;font-size:13px;color:#9ca3af;cursor:pointer" style-hover="color:#f9fafb">Home
+        <div style="position:absolute;left:12px;right:12px;bottom:3px;height:1px;background:#60a5fa;opacity:{{ navHome }}"></div>
+      </div>
+      <div onClick="{{ goTrips }}" style="position:relative;padding:8px 12px;font-size:13px;color:#9ca3af;cursor:pointer" style-hover="color:#f9fafb">Trips
+        <div style="position:absolute;left:12px;right:12px;bottom:3px;height:1px;background:#60a5fa;opacity:{{ navTrips }}"></div>
+      </div>
+      <div onClick="{{ goMap }}" style="position:relative;padding:8px 12px;font-size:13px;color:#9ca3af;cursor:pointer" style-hover="color:#f9fafb">Map
+        <div style="position:absolute;left:12px;right:12px;bottom:3px;height:1px;background:#60a5fa;opacity:{{ navMap }}"></div>
+      </div>
+      <div onClick="{{ goAbout }}" style="position:relative;padding:8px 12px;font-size:13px;color:#9ca3af;cursor:pointer" style-hover="color:#f9fafb">About
+        <div style="position:absolute;left:12px;right:12px;bottom:3px;height:1px;background:#60a5fa;opacity:{{ navAbout }}"></div>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <div style="animation:viewIn .6s cubic-bezier(.41,.73,.51,1.02) both">
+
+      <div style="position:relative;height:100vh;min-height:640px;width:100%;overflow:hidden;background:#0d1320">
+        <sc-for list="{{ heroSlides }}" as="s" hint-placeholder-count="1">
+          <div style="position:absolute;inset:0;opacity:{{ s.opacity }};transition:opacity 1.6s cubic-bezier(.4,0,.2,1)">
+            <div style="position:absolute;inset:0;animation:kenburns 18s ease-out both">
+              <image-slot id="{{ s.slot }}" shape="rect" fit="cover" placeholder="{{ s.hint }}"></image-slot>
+            </div>
+          </div>
+        </sc-for>
+        <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(13,19,32,.55) 0%,rgba(13,19,32,.12) 32%,rgba(13,19,32,.55) 68%,rgba(13,19,32,.94) 100%)"></div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:0 6vw 7vh;pointer-events:none">
+          <div style="max-width:1080px">
+            <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;color:#93c5fd;text-transform:uppercase;animation:lift .9s .1s cubic-bezier(.41,.73,.51,1.02) both">Nine years, forty-one countries, one camera</div>
+            <h1 style="margin:18px 0 0;font-size:clamp(44px,7.4vw,104px);line-height:.94;font-weight:600;letter-spacing:-0.035em;color:#fff;text-wrap:balance;animation:lift 1s .22s cubic-bezier(.41,.73,.51,1.02) both">I keep going back<br>for the light.</h1>
+            <p style="margin:26px 0 0;max-width:520px;font-size:17px;line-height:1.6;color:#e5e7eb;text-wrap:pretty;animation:lift 1s .36s cubic-bezier(.41,.73,.51,1.02) both">This is the archive. Every frame here has a story attached, and I wrote most of them down while my hands were still cold.</p>
+            <div style="display:flex;align-items:center;gap:14px;margin-top:34px;pointer-events:auto;animation:lift 1s .5s cubic-bezier(.41,.73,.51,1.02) both">
+              <div onClick="{{ goTrips }}" style="display:flex;align-items:center;gap:8px;padding:11px 18px;border-radius:6px;background:#2563eb;color:#fff;font-size:14px;font-weight:500;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.4)" style-hover="background:#1d4ed8">Browse the trips
+                <span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1">arrow_forward</span>
+              </div>
+              <div onClick="{{ goMap }}" style="padding:11px 18px;border-radius:6px;border:1px solid rgba(229,231,235,.28);color:#f3f4f6;font-size:14px;cursor:pointer" style-hover="background:rgba(249,250,251,.08)">Open the map</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:absolute;right:6vw;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:14px;align-items:flex-end">
+          <sc-for list="{{ heroSlides }}" as="s" hint-placeholder-count="1">
+            <div onClick="{{ s.pick }}" style="display:flex;align-items:center;gap:10px;cursor:pointer;opacity:{{ s.dotOpacity }}" style-hover="opacity:1">
+              <span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:#e5e7eb;text-transform:uppercase">{{ s.place }}</span>
+              <div style="width:{{ s.barWidth }};height:2px;background:#f9fafb;transition:width .6s cubic-bezier(.4,0,.2,1)"></div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="position:absolute;left:6vw;bottom:3vh;font-family:'Material Symbols Rounded';font-size:22px;color:#9ca3af;animation:cue 2.6s ease-in-out infinite">keyboard_arrow_down</div>
+      </div>
+
+      <div style="padding:110px 6vw 40px">
+        <div data-reveal="1" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:clamp(32px,6vw,96px);align-items:end;max-width:1320px;margin:0 auto">
+          <div>
+            <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;color:#6b7280;text-transform:uppercase">Recent entries</div>
+            <h2 style="margin:14px 0 0;font-size:clamp(28px,3.4vw,44px);line-height:1.06;font-weight:600;letter-spacing:-0.03em;color:#f9fafb;text-wrap:balance">Six trips I am still thinking about.</h2>
+          </div>
+          <p style="margin:0;font-size:16px;line-height:1.7;color:#9ca3af;text-wrap:pretty">I shoot slowly. Two or three rolls a week, mostly at the edges of the day, mostly alone. What follows is ordered by how often I come back to the files.</p>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;padding:40px 0 0">
+        <sc-for list="{{ trips }}" as="t" hint-placeholder-count="3">
+          <div data-reveal="1" onClick="{{ t.open }}" style="position:relative;height:clamp(320px,56vh,560px);overflow:hidden;cursor:pointer">
+            <div style="position:absolute;inset:0;transition:transform 1.4s cubic-bezier(.4,0,.2,1),filter .8s ease" style-hover="transform:scale(1.045);filter:brightness(1.06)">
+              <image-slot id="{{ t.slot }}" shape="rect" fit="cover" placeholder="{{ t.hint }}"></image-slot>
+            </div>
+            <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(13,19,32,.86) 0%,rgba(13,19,32,.42) 45%,rgba(13,19,32,.1) 100%)"></div>
+            <div style="position:absolute;left:6vw;top:50%;transform:translateY(-50%);pointer-events:none;max-width:min(560px,60vw)">
+              <div style="display:flex;align-items:center;gap:12px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:#93c5fd;text-transform:uppercase">
+                <span>{{ t.num }}</span><span style="width:26px;height:1px;background:#3b82f6"></span><span>{{ t.date }}</span>
+              </div>
+              <div style="margin:14px 0 0;font-size:clamp(30px,4.2vw,58px);line-height:1.0;font-weight:600;letter-spacing:-0.032em;color:#fff;text-wrap:balance">{{ t.title }}</div>
+              <div style="margin:14px 0 0;font-size:15px;color:#e5e7eb">{{ t.place }}</div>
+              <div style="margin:22px 0 0;display:flex;align-items:center;gap:8px;font-size:13px;color:#f3f4f6">Read the entry
+                <span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1">east</span>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div data-reveal="1" style="padding:120px 6vw;text-align:center">
+        <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;color:#6b7280;text-transform:uppercase">Everywhere else</div>
+        <h2 style="margin:16px auto 0;max-width:760px;font-size:clamp(26px,3.2vw,40px);line-height:1.1;font-weight:600;letter-spacing:-0.03em;color:#f9fafb;text-wrap:balance">The archive covers more ground than the journal does.</h2>
+        <div onClick="{{ goMap }}" style="display:inline-flex;align-items:center;gap:8px;margin-top:28px;padding:11px 18px;border-radius:6px;border:1px solid rgba(229,231,235,.28);color:#f3f4f6;font-size:14px;cursor:pointer" style-hover="background:rgba(249,250,251,.08)">See the map
+          <span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1">public</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isTrips }}" hint-placeholder-val="{{ false }}">
+    <div style="animation:viewIn .6s cubic-bezier(.41,.73,.51,1.02) both;padding:132px 6vw 120px">
+      <div style="max-width:1320px;margin:0 auto">
+        <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;color:#6b7280;text-transform:uppercase">Index</div>
+        <h1 style="margin:14px 0 0;font-size:clamp(36px,5vw,72px);line-height:1;font-weight:600;letter-spacing:-0.035em;color:#f9fafb">Trips</h1>
+        <div style="height:1px;background:#1f2937;margin:44px 0 0;transform-origin:left;animation:hair 1s .1s cubic-bezier(.4,0,.2,1) both"></div>
+
+        <sc-for list="{{ trips }}" as="t" hint-placeholder-count="4">
+          <div data-reveal="1" onClick="{{ t.open }}" style="display:grid;grid-template-columns:64px minmax(0,1fr) minmax(0,240px) 132px;gap:clamp(16px,3vw,48px);align-items:center;padding:22px 0;border-bottom:1px solid #1f2937;cursor:pointer;transition:padding-left .4s cubic-bezier(.4,0,.2,1),background .3s ease" style-hover="padding-left:14px;background:rgba(249,250,251,.03)">
+            <span style="font-family:var(--font-mono);font-size:12px;color:#4b5563">{{ t.num }}</span>
+            <div>
+              <div style="font-size:clamp(20px,2.4vw,30px);line-height:1.12;font-weight:600;letter-spacing:-0.025em;color:#f9fafb">{{ t.title }}</div>
+              <div style="margin-top:6px;font-size:14px;color:#9ca3af">{{ t.place }}</div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;color:#6b7280">{{ t.coords }}</div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:16px">
+              <span style="font-family:var(--font-mono);font-size:11.5px;color:#9ca3af">{{ t.date }}</span>
+              <span style="font-family:'Material Symbols Rounded';font-size:18px;color:#60a5fa">east</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isStory }}" hint-placeholder-val="{{ false }}">
+    <div style="animation:viewIn .6s cubic-bezier(.41,.73,.51,1.02) both">
+      <div style="position:relative;height:76vh;min-height:520px;overflow:hidden">
+        <div style="position:absolute;inset:0;animation:kenburns 22s ease-out both">
+          <image-slot id="{{ story.slot }}" shape="rect" fit="cover" placeholder="{{ story.hint }}"></image-slot>
+        </div>
+        <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(13,19,32,.6),rgba(13,19,32,.18) 45%,rgba(13,19,32,.96))"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:0 6vw 6vh;pointer-events:none">
+          <div style="display:flex;align-items:center;gap:12px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:#93c5fd;text-transform:uppercase;animation:lift .8s .05s cubic-bezier(.41,.73,.51,1.02) both">
+            <span>{{ story.num }}</span><span style="width:26px;height:1px;background:#3b82f6"></span><span>{{ story.date }}</span><span style="width:26px;height:1px;background:#3b82f6"></span><span>{{ story.coords }}</span>
+          </div>
+          <h1 style="margin:16px 0 0;max-width:900px;font-size:clamp(36px,5.6vw,80px);line-height:.98;font-weight:600;letter-spacing:-0.035em;color:#fff;text-wrap:balance;animation:lift .9s .18s cubic-bezier(.41,.73,.51,1.02) both">{{ story.title }}</h1>
+          <div style="margin:16px 0 0;font-size:16px;color:#e5e7eb;animation:lift .9s .3s cubic-bezier(.41,.73,.51,1.02) both">{{ story.place }}</div>
+        </div>
+      </div>
+
+      <div style="padding:80px 6vw 0">
+        <div style="max-width:680px;margin:0 auto">
+          <p data-reveal="1" style="margin:0;font-size:21px;line-height:1.62;color:#f3f4f6;text-wrap:pretty">{{ story.lede }}</p>
+          <p data-reveal="1" style="margin:32px 0 0;font-size:17px;line-height:1.78;color:#d1d5db;text-wrap:pretty">{{ story.p1 }}</p>
+          <div data-reveal="1" style="margin:52px 0;padding-left:24px;border-left:2px solid #2563eb">
+            <div style="font-size:clamp(22px,2.6vw,30px);line-height:1.28;font-weight:500;letter-spacing:-0.02em;color:#f9fafb;text-wrap:pretty">{{ story.quote }}</div>
+          </div>
+          <p data-reveal="1" style="margin:0;font-size:17px;line-height:1.78;color:#d1d5db;text-wrap:pretty">{{ story.p2 }}</p>
+        </div>
+      </div>
+
+      <div data-reveal="1" style="margin:80px 0 0;height:clamp(320px,64vh,640px);overflow:hidden">
+        <div style="width:100%;height:100%;animation:kenburns 26s ease-out both">
+          <image-slot id="{{ story.slotB }}" shape="rect" fit="cover" placeholder="{{ story.hintB }}"></image-slot>
+        </div>
+      </div>
+
+      <div style="padding:64px 6vw 0">
+        <div style="max-width:680px;margin:0 auto">
+          <p data-reveal="1" style="margin:0;font-size:17px;line-height:1.78;color:#d1d5db;text-wrap:pretty">{{ story.p3 }}</p>
+          <div data-reveal="1" style="display:flex;gap:14px;margin:56px 0 0">
+            <div style="flex:1;aspect-ratio:3/4;overflow:hidden;border-radius:2px">
+              <image-slot id="{{ story.slotC }}" shape="rect" fit="cover" placeholder="Detail frame"></image-slot>
+            </div>
+            <div style="flex:1;aspect-ratio:3/4;overflow:hidden;border-radius:2px">
+              <image-slot id="{{ story.slotD }}" shape="rect" fit="cover" placeholder="Detail frame"></image-slot>
+            </div>
+          </div>
+          <div data-reveal="1" style="margin:22px 0 0;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.05em;color:#6b7280">{{ story.caption }}</div>
+        </div>
+      </div>
+
+      <div data-reveal="1" onClick="{{ openNext }}" style="margin:120px 0 0;padding:64px 6vw;border-top:1px solid #1f2937;cursor:pointer;transition:background .3s ease" style-hover="background:rgba(249,250,251,.03)">
+        <div style="max-width:1320px;margin:0 auto;display:flex;align-items:flex-end;justify-content:space-between;gap:32px;flex-wrap:wrap">
+          <div>
+            <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;color:#6b7280;text-transform:uppercase">Next entry</div>
+            <div style="margin-top:12px;font-size:clamp(26px,3.4vw,44px);line-height:1.04;font-weight:600;letter-spacing:-0.03em;color:#f9fafb">{{ nextTrip.title }}</div>
+            <div style="margin-top:8px;font-size:14px;color:#9ca3af">{{ nextTrip.place }}</div>
+          </div>
+          <span style="font-family:'Material Symbols Rounded';font-size:34px;color:#60a5fa">east</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isMap }}" hint-placeholder-val="{{ false }}">
+    <div style="animation:viewIn .6s cubic-bezier(.41,.73,.51,1.02) both;padding:132px 0 0">
+      <div style="padding:0 6vw">
+        <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,360px);gap:clamp(24px,5vw,72px);align-items:end">
+          <div>
+            <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;color:#6b7280;text-transform:uppercase">Coordinates</div>
+            <h1 style="margin:14px 0 0;font-size:clamp(36px,5vw,72px);line-height:1;font-weight:600;letter-spacing:-0.035em;color:#f9fafb">Where I've shot</h1>
+          </div>
+          <p style="margin:0;font-size:15px;line-height:1.7;color:#9ca3af;text-wrap:pretty">Six journal entries so far. Click a marker to read the one attached to it.</p>
+        </div>
+      </div>
+      <div style="margin:44px 0 0;padding:0 3vw">
+        <div style="max-width:1500px;margin:0 auto;height:min(70vh,720px);border:1px solid #1f2937;border-radius:8px;overflow:hidden;background:#0d1320">
+          <iframe src="map.html" title="Map of destinations" style="width:100%;height:100%;border:0;display:block"></iframe>
+        </div>
+      </div>
+      <div style="padding:56px 6vw 120px">
+        <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:#1f2937;border:1px solid #1f2937;border-radius:8px;overflow:hidden">
+          <sc-for list="{{ trips }}" as="t" hint-placeholder-count="6">
+            <div onClick="{{ t.open }}" style="padding:20px 22px;background:#111827;cursor:pointer;transition:background .3s ease" style-hover="background:#1b2434">
+              <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:#60a5fa">{{ t.coords }}</div>
+              <div style="margin-top:10px;font-size:17px;font-weight:600;letter-spacing:-0.015em;color:#f9fafb">{{ t.place }}</div>
+              <div style="margin-top:4px;font-size:13.5px;color:#9ca3af">{{ t.title }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAbout }}" hint-placeholder-val="{{ false }}">
+    <div style="animation:viewIn .6s cubic-bezier(.41,.73,.51,1.02) both;padding:132px 6vw 120px">
+      <div style="max-width:1100px;margin:0 auto;display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:clamp(32px,6vw,80px);align-items:start">
+        <div style="aspect-ratio:4/5;overflow:hidden;border-radius:4px">
+          <image-slot id="about-portrait" shape="rect" fit="cover" placeholder="A portrait of you"></image-slot>
+        </div>
+        <div>
+          <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;color:#6b7280;text-transform:uppercase">About</div>
+          <h1 style="margin:14px 0 0;font-size:clamp(30px,4vw,52px);line-height:1.02;font-weight:600;letter-spacing:-0.032em;color:#f9fafb;text-wrap:balance">I take the long way around.</h1>
+          <p style="margin:28px 0 0;font-size:17px;line-height:1.78;color:#d1d5db;text-wrap:pretty">I started carrying a camera because I kept forgetting the good parts. Nine years later the forgetting is under control and the archive is not. This site is my attempt at giving the better frames somewhere to live, with the notes I wrote next to them.</p>
+          <p style="margin:20px 0 0;font-size:17px;line-height:1.78;color:#d1d5db;text-wrap:pretty">I shoot digital for work and film when I am travelling for myself. Mostly one body, one 35mm lens. If a frame needed a second lens, it probably needed a second trip instead.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;margin:44px 0 0;background:#1f2937;border:1px solid #1f2937;border-radius:8px;overflow:hidden">
+            <div style="padding:18px 20px;background:#111827">
+              <div style="font-family:var(--font-mono);font-size:22px;color:#f9fafb">41</div>
+              <div style="margin-top:6px;font-size:12.5px;color:#9ca3af">Countries</div>
+            </div>
+            <div style="padding:18px 20px;background:#111827">
+              <div style="font-family:var(--font-mono);font-size:22px;color:#f9fafb">9</div>
+              <div style="margin-top:6px;font-size:12.5px;color:#9ca3af">Years shooting</div>
+            </div>
+            <div style="padding:18px 20px;background:#111827">
+              <div style="font-family:var(--font-mono);font-size:22px;color:#f9fafb">35mm</div>
+              <div style="margin-top:6px;font-size:12.5px;color:#9ca3af">Almost always</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin:36px 0 0;flex-wrap:wrap">
+            <a href="mailto:hello@nomadman.photo" style="display:flex;align-items:center;gap:8px;padding:11px 18px;border-radius:6px;background:#2563eb;color:#fff;font-size:14px;font-weight:500" style-hover="background:#1d4ed8;color:#fff">Get in touch
+              <span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1">mail</span>
+            </a>
+            <div onClick="{{ goTrips }}" style="padding:11px 18px;border-radius:6px;border:1px solid rgba(229,231,235,.28);color:#f3f4f6;font-size:14px;cursor:pointer" style-hover="background:rgba(249,250,251,.08)">Back to the trips</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <div style="padding:36px 6vw 44px;border-top:1px solid #1f2937;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
+    <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#4b5563;text-transform:uppercase">Nomadman photo journal</span>
+    <span style="font-size:12.5px;color:#4b5563">All frames my own. Please ask before reposting.</span>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;motion&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Restrained&quot;,&quot;Cinematic&quot;,&quot;Choreographed&quot;],&quot;default&quot;:&quot;Cinematic&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;autoplay&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;slideSeconds&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:3,&quot;max&quot;:14,&quot;step&quot;:1,&quot;default&quot;:6,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#2563eb&quot;,&quot;#3b82f6&quot;,&quot;#1d4ed8&quot;],&quot;default&quot;:&quot;#2563eb&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Look&quot;}}">
+const TRIPS = [
+  { id:'ladakh', num:'01', title:'Above the treeline', place:'Ladakh, India', date:'Sept 2024', coords:'34.15° N, 77.58° E',
+    slot:'cover-ladakh', hint:'Ladakh — wide establishing frame',
+    lede:'The first morning in Leh I could not walk up one flight of stairs. By the fourth I was on a ridge at 4,600 metres waiting for a cloud to move.',
+    p1:'Ladakh does not do soft light. It does hard light, and then it does none, and the ten minutes between them are the whole reason to be there. I shot almost nothing between ten and four. Instead I slept, drank salt tea, and watched the valley change colour through a window.',
+    quote:'Altitude makes you patient. There is no version of rushing that works at 4,600 metres.',
+    p2:'The road to Hanle took eleven hours and produced four frames I kept. That maths sounds bad until you see the four. Two of them are just the road, which is what the trip was actually about.',
+    p3:'I went back to the same pass three evenings running because the first two were flat. On the third the wind dropped and the whole basin went copper for about ninety seconds. I have never been so glad to have been bored twice.',
+    caption:'Left: prayer flags at Khardung La. Right: the guesthouse window in Leh, 5:40am.',
+    slotB:'ladakh-b', hintB:'Ladakh — the full-bleed frame', slotC:'ladakh-c', slotD:'ladakh-d' },
+  { id:'iceland', num:'02', title:'Ring road in the blue hour', place:'Vestrahorn, Iceland', date:'March 2023', coords:'64.25° N, 14.98° W',
+    slot:'cover-iceland', hint:'Iceland — black sand and mountain',
+    lede:'Nine days, one loop, and a rental car that smelled permanently of wet wool. March in Iceland gives you a blue hour that lasts most of the afternoon.',
+    p1:'I had planned for aurora and got weather instead. That turned out fine. The black sand at Stokksnes holds water in thin sheets, and every twenty seconds the mountain arrives upside down at your feet.',
+    quote:'I stopped chasing the forecast around day three and started shooting whatever the sky was already doing.',
+    p2:'Most of the good frames came from pulling over without a plan. The famous stops were crowded and, honestly, worse. The gravel turnoffs between them were empty and full of horses.',
+    p3:'On the last night the clouds finally broke near Hofn. I shot for forty minutes with numb hands and then sat in the car with the heater on full, going through the back of the camera, grinning like an idiot.',
+    caption:'Left: the turf church near Vik. Right: windscreen, somewhere on the 1.',
+    slotB:'iceland-b', hintB:'Iceland — the full-bleed frame', slotC:'iceland-c', slotD:'iceland-d' },
+  { id:'kyoto', num:'03', title:'Lanterns and rain', place:'Kyoto, Japan', date:'Nov 2023', coords:'35.01° N, 135.77° E',
+    slot:'cover-kyoto', hint:'Kyoto — wet street at night',
+    lede:'It rained for six of the eight evenings and it was the best thing that could have happened to the pictures.',
+    p1:'Wet asphalt turns every shopfront into a second shopfront. I walked the same three blocks of Pontocho every night with a 35mm wide open, waiting for someone to step into the reflection.',
+    quote:'Rain empties a street of everyone who is not committed to being there. Those are the people worth photographing.',
+    p2:'The temples were the least interesting part. The good frames are all doorways, laundry, one cat under a vending machine, and a man closing his shutters at 11pm in Nishiki.',
+    p3:'I got the maple colour by accident. I was a week late for the peak, which meant the leaves were on the ground and lit from below by every puddle in the city.',
+    caption:'Left: Pontocho, 10:20pm. Right: the vending machine cat, unimpressed.',
+    slotB:'kyoto-b', hintB:'Kyoto — the full-bleed frame', slotC:'kyoto-c', slotD:'kyoto-d' },
+  { id:'patagonia', num:'04', title:'Wind that never sleeps', place:'Torres del Paine, Chile', date:'Jan 2025', coords:'50.94° S, 73.41° W',
+    slot:'cover-patagonia', hint:'Patagonia — granite towers at dawn',
+    lede:'Patagonian wind is not weather. It is a permanent condition that you either photograph or fight, and fighting it does not go well.',
+    p1:'I gave up on long exposures by the second day. The tripod walked. What worked instead was fast shutter and letting the lake spray sit in the frame as texture.',
+    quote:'Everything here is moving. Once I accepted that, the pictures got better and my hands got worse.',
+    p2:'The towers went pink for maybe four minutes. Around forty of us were standing there for it in total silence, which felt appropriate and slightly ridiculous.',
+    p3:'The frames I like most are not of the towers at all. They are of the lenticular clouds stacking up over the pass, and of a guanaco that stood in the road long enough to be a portrait.',
+    caption:'Left: lenticular stack over the pass. Right: the guanaco, holding.',
+    slotB:'patagonia-b', hintB:'Patagonia — the full-bleed frame', slotC:'patagonia-c', slotD:'patagonia-d' },
+  { id:'namibia', num:'05', title:'Red dunes at five in the morning', place:'Sossusvlei, Namibia', date:'July 2022', coords:'24.73° S, 15.35° E',
+    slot:'cover-namibia', hint:'Namibia — dune ridge line',
+    lede:'You get one hour. The gate opens before sunrise, and by eight the contrast is gone and the sand is too bright to look at directly.',
+    p1:'The dunes work as pure graphic shapes. Ridge, shadow, sky, nothing else in the frame. I shot longer lenses here than anywhere else on this list, mostly to strip out context.',
+    quote:'It is the only place I have been where the landscape reads better abstract than literal.',
+    p2:'Deadvlei is exactly as photographed as you think it is. I still shot it. Then I walked twenty minutes past it and had a pan entirely to myself for an hour.',
+    p3:'Sand gets into everything. Two years later I still find it in the camera bag, and I have stopped trying to clean it out.',
+    caption:'Left: Deadvlei, 6:50am. Right: the ridge above the pan, an hour later.',
+    slotB:'namibia-b', hintB:'Namibia — the full-bleed frame', slotC:'namibia-c', slotD:'namibia-d' },
+  { id:'faroe', num:'06', title:'Nine days of fog', place:'Faroe Islands', date:'June 2024', coords:'62.01° N, 6.79° W',
+    slot:'cover-faroe', hint:'Faroe Islands — cliffs in fog',
+    lede:'I booked the Faroes for the cliffs and got a wall of grey. Then the grey started doing things no clear sky can do.',
+    p1:'Fog is a free softbox and a free background. It removes everything more than two hundred metres away, which turns an overwhelming landscape into a manageable one.',
+    quote:'Bad visibility is just aggressive editing that happens before the shutter.',
+    p2:'Sheep appear out of it constantly and at close range. Half my keepers from this trip are essentially sheep portraits, and I am at peace with that.',
+    p3:'On the eighth afternoon it lifted for maybe twenty minutes over Sorvagsvatn. I have the frames. I am still not sure they are better than the fog ones.',
+    caption:'Left: the road to Gasadalur. Right: twenty minutes of visibility.',
+    slotB:'faroe-b', hintB:'Faroe — the full-bleed frame', slotC:'faroe-c', slotD:'faroe-d' }
+];
+
+class Component extends DCLogic {
+  state = { view: 'home', slide: 0, tripId: 'ladakh' };
+
+  componentDidMount() {
+    this.timer = setInterval(() => {
+      if (this.state.view !== 'home' || this.props.autoplay === false) return;
+      this.setState(s => ({ slide: (s.slide + 1) % 3 }));
+    }, Math.round((this.props.slideSeconds ?? 6) * 1000));
+    this.io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (!e.isIntersecting) return;
+        e.target.style.opacity = '1';
+        e.target.style.transform = 'none';
+        this.io.unobserve(e.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    this.onMsg = ev => {
+      if (ev.data && ev.data.type === 'trip') this.open(ev.data.id);
+    };
+    addEventListener('message', this.onMsg);
+    this.scan();
+  }
+  componentDidUpdate() { this.scan(); }
+  componentWillUnmount() {
+    clearInterval(this.timer);
+    if (this.io) this.io.disconnect();
+    removeEventListener('message', this.onMsg);
+  }
+
+  scan() {
+    if (!this.io) return;
+    const dur = this.motion().reveal;
+    requestAnimationFrame(() => {
+      document.querySelectorAll('[data-reveal]:not([data-seen])').forEach(el => {
+        el.setAttribute('data-seen', '1');
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(28px)';
+        el.style.transition = `opacity ${dur}ms cubic-bezier(.41,.73,.51,1.02), transform ${dur}ms cubic-bezier(.41,.73,.51,1.02)`;
+        this.io.observe(el);
+      });
+    });
+  }
+
+  motion() {
+    const m = this.props.motion ?? 'Cinematic';
+    if (m === 'Restrained') return { reveal: 380 };
+    if (m === 'Choreographed') return { reveal: 1100 };
+    return { reveal: 760 };
+  }
+
+  go(view) {
+    this.setState({ view });
+    requestAnimationFrame(() => scrollTo({ top: 0, behavior: 'auto' }));
+  }
+  open(id) {
+    this.setState({ view: 'story', tripId: id });
+    requestAnimationFrame(() => scrollTo({ top: 0, behavior: 'auto' }));
+  }
+
+  renderVals() {
+    const accent = this.props.accent ?? '#2563eb';
+    const idx = TRIPS.findIndex(t => t.id === this.state.tripId);
+    const story = TRIPS[idx < 0 ? 0 : idx];
+    const nextTrip = TRIPS[((idx < 0 ? 0 : idx) + 1) % TRIPS.length];
+
+    const heroSlides = [
+      { slot: 'hero-1', hint: 'Your strongest wide frame', place: 'Ladakh' },
+      { slot: 'hero-2', hint: 'A second hero frame', place: 'Faroe Islands' },
+      { slot: 'hero-3', hint: 'A third hero frame', place: 'Patagonia' }
+    ].map((s, i) => ({
+      ...s,
+      opacity: this.state.slide === i ? 1 : 0,
+      dotOpacity: this.state.slide === i ? 1 : 0.45,
+      barWidth: this.state.slide === i ? '48px' : '20px',
+      pick: () => this.setState({ slide: i })
+    }));
+
+    return {
+      accent, heroSlides, story, nextTrip,
+      trips: TRIPS.map(t => ({ ...t, open: () => this.open(t.id) })),
+      isHome: this.state.view === 'home',
+      isTrips: this.state.view === 'trips',
+      isStory: this.state.view === 'story',
+      isMap: this.state.view === 'map',
+      isAbout: this.state.view === 'about',
+      navHome: this.state.view === 'home' ? 1 : 0,
+      navTrips: this.state.view === 'trips' ? 1 : 0,
+      navMap: this.state.view === 'map' ? 1 : 0,
+      navAbout: this.state.view === 'about' ? 1 : 0,
+      goHome: () => this.go('home'),
+      goTrips: () => this.go('trips'),
+      goMap: () => this.go('map'),
+      goAbout: () => this.go('about'),
+      openNext: () => this.open(nextTrip.id)
+    };
+  }
+}
+
+</script>
+</body>
+</html>

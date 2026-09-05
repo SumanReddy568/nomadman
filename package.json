@@ -1,0 +1,12 @@
+{
+  "name": "nomadman",
+  "private": true,
+  "type": "module",
+  "description": "Travel photo journal. Static front-end over the open-api-worker photo albums.",
+  "scripts": {
+    "dev": "npx --yes serve public",
+    "test": "node --test test.js",
+    "deploy": "npx --yes wrangler deploy",
+    "preview": "npx --yes wrangler dev"
+  }
+}

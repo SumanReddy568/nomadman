@@ -1,0 +1,12 @@
+# nomadman is a static-assets Worker: no server code, wrangler just uploads
+# public/ and serves it from the edge. Photos come from the separate
+# open-api-worker over its public /share/* endpoints (see README).
+name = "nomadman"
+compatibility_date = "2026-01-01"
+account_id = "149585afc77fbfb3dfdf5b43646fb8ca"
+
+[assets]
+directory = "./public"
+
+[observability]
+enabled = true
