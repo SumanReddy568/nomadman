@@ -21,8 +21,6 @@
 <body>
 <div id="wrap"><svg></svg></div>
 <script>
-// Markers come from the same trips.json the parent page reads, so adding a
-// trip puts a pin on the map with no edit here.
 const svg = d3.select('svg');
 let world = null, TRIPS = [];
 
@@ -63,14 +61,18 @@ function draw(){
   });
 }
 
-Promise.all([
+// Markers come from the same public journal feed the parent page reads, so
+// publishing a trip drops a pin here with no edit.
+fetch('config.json').then(r => r.json()).then(cfg => Promise.all([
   d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json'),
-  fetch('trips.json').then(r => r.json()),
-]).then(([topo, cfg]) => {
+  fetch(cfg.apiBase + '/journal/api/trips').then(r => r.json()),
+])).then(([topo, feed]) => {
   world = topojson.feature(topo, topo.objects.countries);
-  TRIPS = (cfg.trips || []).filter(t => Number.isFinite(t.lat) && Number.isFinite(t.lon));
+  TRIPS = (feed.trips || [])
+    .filter(t => Number.isFinite(t.lat) && Number.isFinite(t.lon))
+    .map(t => ({ id: t.id, marker: t.place || t.title, lat: t.lat, lon: t.lon }));
   draw();
-});
+}).catch(err => console.warn('map: feed unavailable —', err.message));
 addEventListener('resize', () => { clearTimeout(window.__t); window.__t = setTimeout(draw, 150); });
 </script>
 </body>

@@ -11,51 +11,66 @@ That's the mockup — `public/` is the implementation.
 wrangler.toml   static-assets Worker: uploads public/, no server code
 public/
   index.html    shell: nav, <main>, footer
-  app.js        router + the five views (home, trips, story, map, about)
+  app.js        router + the public views (home, trips, story, map, about)
+  admin.js      the journal editor, loaded only on #/admin
   styles.css    the whole design system, one file
-  trips.json    ALL content: prose, coords, and each trip's share token
-  map.html      d3-geo world map, markers read from trips.json
+  config.json   API origin + the site's own standing copy. No trip content.
+  map.html      d3-geo world map, markers read from the live feed
 design/         the canvas source, for reference
 test.js         self-check for the pure helpers — `npm test`
 ```
 
-## How photos get here
+## Where the content lives
 
-Each trip points at one **shared album** in the worker. Nothing here talks to S3
-directly, and nothing here needs a login — only the public share surface:
+Nothing in this repo. A **trip is an album** in the worker's photo library that
+you published to the journal. The public feed returns those, and the photos are
+read live through each album's share token — publishing *is* the sync, nothing
+is ever copied here.
 
-| Call | Used for |
-| --- | --- |
-| `GET {apiBase}/share/{token}/api/album` | album title + photo list |
-| `GET {apiBase}/share/{token}/photos/{id}/thumb` | gallery grid |
-| `GET {apiBase}/share/{token}/photos/{id}/original` | the big editorial frames |
-| `GET {apiBase}/share/{token}/zip` | "Download all" |
+| Call | Used for | Auth |
+| --- | --- | --- |
+| `GET {apiBase}/journal/api/trips` | the trip index + entry copy | none |
+| `GET {apiBase}/share/{token}/api/album` | one trip's photo list | none |
+| `GET {apiBase}/share/{token}/photos/{id}/thumb` | gallery grid | none |
+| `GET {apiBase}/share/{token}/photos/{id}/original` | editorial frames | none |
+| `GET {apiBase}/share/{token}/zip` | "Download all" | none |
+| `POST {apiBase}/login` | the editor | — |
+| `GET/POST/PATCH {apiBase}/photos/api/albums` | the editor | bearer |
 
 Per trip the site takes the first still as the cover/hero, the next as the
 full-bleed frame, the next two as the detail pair, and shows **every** frame
-(videos included, badged) in the gallery grid at the bottom of the entry.
+(videos included, badged) in the gallery grid at the foot of the entry.
 
-A trip with `"share": ""` still renders — its frames fall back to labelled
-placeholders — so the site is deployable before the albums exist.
+## The editor (`#/admin`)
 
-## Wiring up a trip
+Sign in with the same account as the photo library. There is no separate
+password and no backend of its own — nomadman calls the worker's existing
+`/login` and album APIs straight from the browser.
 
-1. In the worker's photo dashboard (`/photos`), create the album with the **S3**
-   storage backend and upload the trip's photos.
-2. Turn **sharing on** for that album and copy its share token (the `…/share/<token>`
-   segment of the share link).
-3. Paste it into the trip's `"share"` field in `public/trips.json`.
+- **In the journal** — the toggle that publishes an album. That's the sync.
+- **Order / Date label / home hero** — where it sits and how it's captioned.
+- **Lede, entry, pull quote, caption** — the writing. Blank lines split
+  paragraphs. Left empty, the album's own description becomes the lede.
+- **+ New trip** — creates an S3-backed album; upload into it at `/photos`.
 
-Adding a trip = one more object in `trips.json`. Set `lat`/`lon` and it appears on
-the map; set `"hero": true` and it joins the home slideshow (first three win).
+An album published with its share link off is flagged, because the journal
+reads photos through that link and would otherwise show empty frames.
 
 ## Requires a worker deploy
 
-The album JSON is fetched cross-origin, so `src/photos/handler.js` in the worker
-now sets `Access-Control-Allow-Origin: *` on `GET /share/:token/api/album`. That
-endpoint was already public and forwardable, so this exposes nothing new — but
-**the worker must be redeployed** or every album fetch fails CORS and the site
-shows placeholders.
+This site depends on worker changes that are **not deployed yet** — until they
+are, the journal renders its empty state:
+
+- `GET /journal/api/trips`, the public trip feed (new).
+- `Access-Control-Allow-Origin: *` on `GET /share/:token/api/album`, so the
+  album JSON can be read cross-origin. Both endpoints were already public and
+  forwardable, so neither exposes anything new.
+- Migration `0010_album_journal.sql` adds the nullable `albums.journal` column.
+  **Apply it before deploying**, or every publish fails:
+
+  ```sh
+  npx wrangler d1 migrations apply photos_db --remote
+  ```
 
 ```sh
 cd ../cloud-fare-open-api-worker && npx wrangler deploy

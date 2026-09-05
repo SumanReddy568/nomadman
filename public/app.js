@@ -1,13 +1,17 @@
 // Nomadman — travel photo journal.
 //
-// Content (prose, coords, order) lives in trips.json. Photos live in the
-// open-api-worker photo albums, reached through each trip's PUBLIC share
-// token: GET {apiBase}/share/{token}/api/album returns the album + photo
-// list, and {apiBase}/share/{token}/photos/{id}/{thumb|original} serves the
-// bytes (S3-backed when the album was created with the s3 storage backend).
+// There is no trip content in this repo. A trip is an album in the
+// open-api-worker photo app that its owner published to the journal. The
+// public feed GET {apiBase}/journal/api/trips returns those (title, place,
+// coords, share token, cover, entry copy), and the photos are read through
+// each trip's public share token:
 //
-// A trip with an empty `share` still renders — the frames fall back to a
-// labelled placeholder — so the site is deployable before the albums exist.
+//   {apiBase}/share/{token}/api/album              the photo list (story view only)
+//   {apiBase}/share/{token}/photos/{id}/thumb      gallery grid
+//   {apiBase}/share/{token}/photos/{id}/original   editorial frames
+//
+// config.json holds only the API origin and the site's own standing copy.
+// Publishing, ordering and writing an entry all happen in #/admin.
 
 // ── pure helpers (exported for test.js) ─────────────────────────────
 
@@ -16,12 +20,51 @@ export function routeOf(hash) {
   const parts = String(hash || "").replace(/^#\/?/, "").split("/").filter(Boolean);
   if (!parts.length) return { view: "home", id: null };
   if (parts[0] === "trip") return { view: "story", id: parts[1] ? decodeURIComponent(parts[1]) : null };
-  if (["trips", "map", "about"].includes(parts[0])) return { view: parts[0], id: null };
+  if (["trips", "map", "about", "admin"].includes(parts[0])) return { view: parts[0], id: null };
   return { view: "home", id: null };
 }
 
 export function photoUrl(apiBase, share, id, variant = "thumb") {
   return `${apiBase}/share/${encodeURIComponent(share)}/photos/${encodeURIComponent(id)}/${variant}`;
+}
+
+/** 34.15, 77.58 -> "34.15° N, 77.58° E". Empty when the album has no pin. */
+export function fmtCoords(lat, lon) {
+  if (typeof lat !== "number" || typeof lon !== "number") return "";
+  return `${Math.abs(lat).toFixed(2)}° ${lat >= 0 ? "N" : "S"}, ${Math.abs(lon).toFixed(2)}° ${lon >= 0 ? "E" : "W"}`;
+}
+
+/**
+ * Feed row -> what the views render. Anything the album can't supply falls
+ * back to something printable, so a trip published with nothing but a rank
+ * still renders a complete-looking entry.
+ */
+export function mapTrip(row, i) {
+  const j = row.journal || {};
+  const body = Array.isArray(j.body) ? j.body.filter(Boolean) : [];
+  return {
+    id: row.id,
+    share: row.shareToken,
+    coverPhotoId: row.coverPhotoId || null,
+    photoCount: row.photoCount || 0,
+    num: String(i + 1).padStart(2, "0"),
+    title: row.title || "Untitled trip",
+    place: row.place || row.title || "",
+    marker: row.place || row.title || "",
+    date: j.date || (row.createdAt
+      ? new Date(row.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })
+      : ""),
+    lat: typeof row.lat === "number" ? row.lat : null,
+    lon: typeof row.lon === "number" ? row.lon : null,
+    coords: fmtCoords(row.lat, row.lon),
+    hero: !!j.hero,
+    // The album description is the natural lede for a trip published without
+    // one — it's already the blurb its owner wrote for the album.
+    lede: j.lede || row.description || "",
+    body,
+    quote: j.quote || "",
+    caption: j.caption || "",
+  };
 }
 
 /**
@@ -42,48 +85,64 @@ export function pickPhotos(media) {
 
 // ── state ──────────────────────────────────────────────────────────
 
-let CFG = null;
+export let CFG = null;
 let TRIPS = [];
-const ALBUMS = new Map(); // trip id -> { title, description, photos[] } | null
+let feedError = null;
+const ALBUMS = new Map(); // trip id -> album JSON | null, filled lazily per story
 let slide = 0;
 let slideTimer = null;
+let io = null;
 let route = { view: "home", id: null };
 
 const el = (id) => document.getElementById(id);
-const esc = (s) =>
+export const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const slots = (t) => pickPhotos(ALBUMS.get(t?.id)?.photos);
 
-/** Renders a photo container. `m` is a media row (or null for a placeholder). */
-function frame(t, m, hint, variant = "original") {
-  if (!m) return `<div class="frame empty" data-hint="${esc(hint)}"></div>`;
-  return `<div class="frame"><img src="${esc(photoUrl(CFG.apiBase, t.share, m.id, variant))}" alt="${esc(m.filename || hint)}" loading="lazy" decoding="async"></div>`;
+/** A photo container, by photo id. A null id renders the labelled placeholder. */
+function frame(t, id, hint, variant = "original") {
+  if (!id || !t.share) return `<div class="frame empty" data-hint="${esc(hint)}"></div>`;
+  return `<div class="frame"><img src="${esc(photoUrl(CFG.apiBase, t.share, id, variant))}" alt="${esc(hint)}" loading="lazy" decoding="async"></div>`;
 }
 
 // ── views ──────────────────────────────────────────────────────────
 
+function emptyState() {
+  return `
+<div class="view page">
+  <div class="inner" style="max-width:660px">
+    <div class="kicker">Nothing published yet</div>
+    <h1 style="font-size:clamp(30px,4vw,52px)">The journal is empty.</h1>
+    <p style="margin:24px 0 0;font-size:17px;line-height:1.7;color:var(--muted);text-wrap:pretty">
+      ${feedError
+        ? `The trip feed could not be reached — <code>${esc(feedError)}</code>. Entries appear as soon as the site can read <code>/journal/api/trips</code>.`
+        : "A trip is an album from your photo library that you've published here. Sign in, pick an album, and it shows up on this page with its photos."}
+    </p>
+    <div style="display:flex;gap:12px;margin:32px 0 0;flex-wrap:wrap">
+      <a class="btn btn-primary" href="#/admin">Sign in and publish <span class="ico" style="font-size:17px">arrow_forward</span></a>
+      <a class="btn btn-ghost" href="${esc(CFG.apiBase)}/photos" target="_blank" rel="noopener">Open the photo library</a>
+    </div>
+  </div>
+</div>`;
+}
+
 function viewHome() {
+  if (!TRIPS.length) return emptyState();
   const s = CFG.site;
-  const heroTrips = TRIPS.filter((t) => t.hero).slice(0, 3);
-  const hero = (heroTrips.length ? heroTrips : TRIPS.slice(0, 3)).map((t) => ({ t, m: slots(t).cover }));
+  const heroTrips = TRIPS.filter((t) => t.hero);
+  const hero = (heroTrips.length ? heroTrips : TRIPS).slice(0, 3);
 
   return `
 <div class="view">
   <section class="hero">
-    ${hero
-      .map(
-        ({ t, m }, i) => `
-      <div class="hero-slide${i === slide ? " on" : ""}" data-slide="${i}">
-        ${frame(t, m, `${t.marker} — hero frame`)}
-      </div>`,
-      )
-      .join("")}
+    ${hero.map((t, i) => `
+      <div class="hero-slide${i === slide ? " on" : ""}">${frame(t, t.coverPhotoId, `${t.marker} — hero frame`)}</div>`).join("")}
     <div class="hero-scrim"></div>
     <div class="hero-copy">
       <div>
         <div class="hero-kicker">${esc(s.kicker)}</div>
-        <!-- headline is raw on purpose: it carries a <br>. trips.json is author-owned config, everything else is esc()'d. -->
+        <!-- headline is raw on purpose: it carries a <br>. config.json is author-owned; everything from the API is esc()'d. -->
         <h1>${s.headline}</h1>
         <p>${esc(s.intro)}</p>
         <div class="hero-cta">
@@ -93,14 +152,8 @@ function viewHome() {
       </div>
     </div>
     <div class="hero-dots">
-      ${hero
-        .map(
-          ({ t }, i) => `
-        <button class="hero-dot${i === slide ? " on" : ""}" data-pick="${i}" type="button">
-          <span>${esc(t.marker)}</span><i></i>
-        </button>`,
-        )
-        .join("")}
+      ${hero.map((t, i) => `
+        <button class="hero-dot${i === slide ? " on" : ""}" data-pick="${i}" type="button"><span>${esc(t.marker)}</span><i></i></button>`).join("")}
     </div>
     <div class="hero-cue ico">keyboard_arrow_down</div>
   </section>
@@ -109,26 +162,23 @@ function viewHome() {
     <div data-reveal>
       <div>
         <div class="kicker">Recent entries</div>
-        <h2>${TRIPS.length} trips I am still thinking about.</h2>
+        <h2>${TRIPS.length} ${TRIPS.length === 1 ? "trip" : "trips"} I am still thinking about.</h2>
       </div>
       <p>${esc(s.recentNote)}</p>
     </div>
   </section>
 
   <section class="reel">
-    ${TRIPS.map((t) => {
-      const m = slots(t).cover;
-      return `
+    ${TRIPS.map((t) => `
       <a class="reel-item" data-reveal href="#/trip/${encodeURIComponent(t.id)}">
-        ${frame(t, m, `${t.marker} — cover frame`)}
+        ${frame(t, t.coverPhotoId, `${t.marker} — cover frame`)}
         <div class="reel-copy">
           <div class="rule"><span>${esc(t.num)}</span><i></i><span>${esc(t.date)}</span></div>
           <h3>${esc(t.title)}</h3>
           <div class="place">${esc(t.place)}</div>
           <div class="more">Read the entry <span class="ico" style="font-size:16px">east</span></div>
         </div>
-      </a>`;
-    }).join("")}
+      </a>`).join("")}
   </section>
 
   <section class="closer" data-reveal>
@@ -140,14 +190,14 @@ function viewHome() {
 }
 
 function viewTrips() {
+  if (!TRIPS.length) return emptyState();
   return `
 <div class="view page">
   <div class="inner">
     <div class="kicker">Index</div>
     <h1>Trips</h1>
     <div class="hairline"></div>
-    ${TRIPS.map(
-      (t) => `
+    ${TRIPS.map((t) => `
       <a class="row" data-reveal href="#/trip/${encodeURIComponent(t.id)}">
         <span class="n">${esc(t.num)}</span>
         <div>
@@ -156,26 +206,25 @@ function viewTrips() {
         </div>
         <div class="c">${esc(t.coords)}</div>
         <div class="d"><span>${esc(t.date)}</span><span class="ico">east</span></div>
-      </a>`,
-    ).join("")}
+      </a>`).join("")}
   </div>
 </div>`;
 }
 
 function viewStory(id) {
+  if (!TRIPS.length) return emptyState();
   const idx = Math.max(0, TRIPS.findIndex((t) => t.id === id));
   const t = TRIPS[idx];
   const next = TRIPS[(idx + 1) % TRIPS.length];
   const p = slots(t);
-  const album = ALBUMS.get(t.id);
-  const count = p.all.length;
+  const para = (txt, style = "") => (txt ? `<p data-reveal style="${style}">${esc(txt)}</p>` : "");
 
   return `
 <div class="view">
   <section class="story-hero">
-    ${frame(t, p.cover, `${t.marker} — wide establishing frame`)}
+    ${frame(t, p.cover?.id || t.coverPhotoId, `${t.marker} — wide establishing frame`)}
     <div class="story-copy">
-      <div class="rule"><span>${esc(t.num)}</span><i></i><span>${esc(t.date)}</span><i></i><span>${esc(t.coords)}</span></div>
+      <div class="rule"><span>${esc(t.num)}</span><i></i><span>${esc(t.date)}</span>${t.coords ? `<i></i><span>${esc(t.coords)}</span>` : ""}</div>
       <h1>${esc(t.title)}</h1>
       <div class="place">${esc(t.place)}</div>
     </div>
@@ -183,51 +232,43 @@ function viewStory(id) {
 
   <div style="padding:80px 6vw 0">
     <div class="prose">
-      <p class="lede" data-reveal>${esc(t.lede)}</p>
-      <p data-reveal style="margin:32px 0 0">${esc(t.p1)}</p>
-      <div class="pull" data-reveal>${esc(t.quote)}</div>
-      <p data-reveal style="margin:0">${esc(t.p2)}</p>
+      ${t.lede ? `<p class="lede" data-reveal>${esc(t.lede)}</p>` : ""}
+      ${para(t.body[0], "margin:32px 0 0")}
+      ${t.quote ? `<div class="pull" data-reveal>${esc(t.quote)}</div>` : ""}
+      ${para(t.body[1], "margin:0")}
     </div>
   </div>
 
-  <div class="bleed" data-reveal>${frame(t, p.bleed, `${t.marker} — the full-bleed frame`)}</div>
+  <div class="bleed" data-reveal>${frame(t, p.bleed?.id, `${t.marker} — the full-bleed frame`)}</div>
 
   <div style="padding:64px 6vw 0">
     <div class="prose">
-      <p data-reveal style="margin:0">${esc(t.p3)}</p>
+      ${t.body.slice(2).map((b) => para(b, "margin:0 0 24px")).join("")}
       <div class="pair" data-reveal>
-        ${frame(t, p.pair[0], "Detail frame")}
-        ${frame(t, p.pair[1], "Detail frame")}
+        ${frame(t, p.pair[0]?.id, "Detail frame")}
+        ${frame(t, p.pair[1]?.id, "Detail frame")}
       </div>
-      <div class="caption" data-reveal>${esc(t.caption)}</div>
+      ${t.caption ? `<div class="caption" data-reveal>${esc(t.caption)}</div>` : ""}
     </div>
   </div>
 
-  ${
-    count
-      ? `
+  ${p.all.length ? `
   <section class="gallery" data-reveal>
     <div class="gallery-head">
       <div>
         <div class="kicker">Every frame</div>
-        <div style="margin-top:10px;font-size:15px;color:var(--muted)">${count} from ${esc(album?.title || t.place)}</div>
+        <div style="margin-top:10px;font-size:15px;color:var(--muted)">${p.all.length} from ${esc(t.title)}</div>
       </div>
       <a class="btn btn-ghost" href="${esc(CFG.apiBase)}/share/${encodeURIComponent(t.share)}/zip">Download all <span class="ico" style="font-size:17px">download</span></a>
     </div>
     <div class="gallery-grid">
-      ${p.all
-        .map(
-          (m) => `
+      ${p.all.map((m) => `
         <a href="${esc(photoUrl(CFG.apiBase, t.share, m.id, "original"))}" target="_blank" rel="noopener" title="${esc(m.filename || "")}">
-          ${frame(t, m, "", "thumb")}
-          ${(m.mediaType || "photo") === "video" ? '<span class="ico" style="position:absolute;left:10px;bottom:8px;font-size:20px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)">play_circle</span>' : ""}
-        </a>`,
-        )
-        .join("")}
+          ${frame(t, m.id, m.filename || "Frame", "thumb")}
+          ${(m.mediaType || "photo") === "video" ? '<span class="ico play-badge">play_circle</span>' : ""}
+        </a>`).join("")}
     </div>
-  </section>`
-      : ""
-  }
+  </section>` : ""}
 
   <a class="next" data-reveal href="#/trip/${encodeURIComponent(next.id)}">
     <div>
@@ -251,21 +292,19 @@ function viewMap() {
         <div class="kicker">Coordinates</div>
         <h1 style="margin:14px 0 0;font-size:clamp(36px,5vw,72px);line-height:1;font-weight:600;letter-spacing:-.035em">Where I've shot</h1>
       </div>
-      <p style="margin:0;font-size:15px;line-height:1.7;color:var(--muted);text-wrap:pretty">${TRIPS.length} journal entries so far. Click a marker to read the one attached to it.</p>
+      <p style="margin:0;font-size:15px;line-height:1.7;color:var(--muted);text-wrap:pretty">${TRIPS.length} ${TRIPS.length === 1 ? "entry" : "entries"} so far. Click a marker to read the one attached to it.</p>
     </div>
   </div>
   <div class="map-shell"><div><iframe src="map.html" title="Map of destinations" loading="lazy"></iframe></div></div>
   <div style="padding:56px 6vw 120px">
     <div style="max-width:1320px;margin:0 auto">
       <div class="tiles">
-        ${TRIPS.map(
-          (t) => `
+        ${TRIPS.map((t) => `
           <a class="tile" href="#/trip/${encodeURIComponent(t.id)}">
-            <div class="c">${esc(t.coords)}</div>
+            <div class="c">${esc(t.coords || "No pin set")}</div>
             <div class="p">${esc(t.place)}</div>
             <div class="t">${esc(t.title)}</div>
-          </a>`,
-        ).join("")}
+          </a>`).join("")}
       </div>
     </div>
   </div>
@@ -274,20 +313,10 @@ function viewMap() {
 
 function viewAbout() {
   const a = CFG.site.about;
-  // The portrait can come from any album — point `portraitShare` at one and
-  // `portraitIndex` at the frame within it.
-  const src = a.portraitShare
-    ? photoUrl(CFG.apiBase, a.portraitShare, (ALBUMS.get("__portrait")?.photos || [])[a.portraitIndex || 0]?.id, "original")
-    : null;
-
   return `
 <div class="view page">
   <div class="about">
-    <div class="portrait">${
-      src && !src.includes("undefined")
-        ? `<div class="frame"><img src="${esc(src)}" alt="Portrait" loading="lazy"></div>`
-        : '<div class="frame empty" data-hint="A portrait of you"></div>'
-    }</div>
+    <div class="portrait"><div class="frame empty" data-hint="A portrait of you"></div></div>
     <div>
       <div class="kicker">About</div>
       <h1>${esc(a.headline)}</h1>
@@ -307,9 +336,7 @@ function viewAbout() {
 
 // ── render + wiring ────────────────────────────────────────────────
 
-let io = null;
-
-function render() {
+export function render() {
   const html =
     route.view === "trips" ? viewTrips()
     : route.view === "story" ? viewStory(route.id)
@@ -318,9 +345,15 @@ function render() {
     : viewHome();
 
   el("view").innerHTML = html;
+  afterRender(route.view);
+  if (route.view === "home") startSlideshow();
+  else stopSlideshow();
+}
 
+/** Post-render wiring shared with admin.js, which paints into #view itself. */
+export function afterRender(viewName = route.view) {
   document.querySelectorAll("[data-nav]").forEach((a) => {
-    const on = a.dataset.nav === route.view || (route.view === "story" && a.dataset.nav === "trips");
+    const on = a.dataset.nav === viewName || (viewName === "story" && a.dataset.nav === "trips");
     if (on) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
@@ -342,9 +375,6 @@ function render() {
     { threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
   );
   document.querySelectorAll("[data-reveal]").forEach((n) => io.observe(n));
-
-  if (route.view === "home") startSlideshow();
-  else stopSlideshow();
 }
 
 function startSlideshow() {
@@ -363,38 +393,63 @@ function setSlide(i) {
   document.querySelectorAll(".hero-dot").forEach((n, k) => n.classList.toggle("on", k === i));
 }
 
+/** The photo list for one trip. Only a story view needs it, so it's lazy. */
 async function loadAlbum(t) {
-  if (!t.share) return;
+  if (!t?.share || ALBUMS.has(t.id)) return;
+  ALBUMS.set(t.id, null); // claim it so a re-render doesn't refetch
   try {
     const r = await fetch(`${CFG.apiBase}/share/${encodeURIComponent(t.share)}/api/album`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     ALBUMS.set(t.id, await r.json());
   } catch (err) {
-    console.warn(`nomadman: album for "${t.id}" unavailable —`, err.message);
-    ALBUMS.set(t.id, null);
+    console.warn(`nomadman: photos for "${t.id}" unavailable —`, err.message);
+  }
+}
+
+/** Re-read the trip feed. Called on boot and after the admin changes anything. */
+export async function loadTrips() {
+  try {
+    const r = await fetch(`${CFG.apiBase}/journal/api/trips`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    TRIPS = (data.trips || []).map(mapTrip);
+    feedError = null;
+  } catch (err) {
+    feedError = err.message;
+    TRIPS = [];
+    console.warn("nomadman: trip feed unavailable —", err.message);
+  }
+  ALBUMS.clear(); // share tokens may have been regenerated
+  return TRIPS;
+}
+
+async function show() {
+  if (route.view === "admin") {
+    const admin = await import("./admin.js");
+    await admin.renderAdmin();
+    return;
+  }
+  render();
+  if (route.view === "story" && TRIPS.length) {
+    const t = TRIPS.find((x) => x.id === route.id) || TRIPS[0];
+    if (!ALBUMS.has(t.id)) {
+      await loadAlbum(t);
+      if (route.view === "story") render(); // swap placeholders for real frames
+    }
   }
 }
 
 function onHash() {
-  const next = routeOf(location.hash);
-  route = next;
-  render();
+  route = routeOf(location.hash);
+  show();
   scrollTo({ top: 0, behavior: "auto" });
 }
 
 async function boot() {
-  CFG = await (await fetch("trips.json")).json();
-  TRIPS = CFG.trips;
-
+  CFG = await (await fetch("config.json")).json();
   route = routeOf(location.hash);
-  render(); // paint placeholders immediately, then swap in photos
-
-  const portrait = CFG.site.about.portraitShare;
-  await Promise.all([
-    ...TRIPS.map(loadAlbum),
-    portrait ? loadAlbum({ id: "__portrait", share: portrait }) : null,
-  ].filter(Boolean));
-  render();
+  await loadTrips();
+  await show();
 
   addEventListener("hashchange", onHash);
   addEventListener("click", (e) => {

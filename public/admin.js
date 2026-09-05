@@ -1,0 +1,331 @@
+// The journal editor. Loaded on demand by app.js when the route is #/admin,
+// so the public site never pays for it.
+//
+// There is no backend here. This talks straight to open-api-worker with the
+// SAME account that owns the photo library:
+//
+//   POST  /login                      -> bearer token (source "photo-album")
+//   GET   /photos/api/albums          -> your albums
+//   POST  /photos/api/albums          -> create a trip
+//   PATCH /photos/api/albums/:id      -> publish / unpublish / write the entry
+//
+// Publishing is the whole "sync": once an album is in the journal, the public
+// pages read its photos live through its share token. Nothing is copied.
+
+import { CFG, esc, afterRender, loadTrips } from "./app.js";
+
+const SOURCE = "photo-album";
+const TOKEN_KEY = "nomadman_token";
+const EMAIL_KEY = "nomadman_email";
+
+let albums = [];
+let error = "";
+let busy = false;
+
+const token = () => localStorage.getItem(TOKEN_KEY) || "";
+const account = () => localStorage.getItem(EMAIL_KEY) || "";
+
+// ── pure helpers (exported for test.js) ────────────────────────────
+
+/** Textarea -> body[]: blank lines separate paragraphs. */
+export function splitParas(text) {
+  return String(text || "")
+    .split(/\n\s*\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** body[] -> textarea. Inverse of splitParas for text that round-trips. */
+export function joinParas(list) {
+  return (Array.isArray(list) ? list : []).join("\n\n");
+}
+
+/** Next free rank, so a newly published trip lands at the end of the journal. */
+export function nextRank(list) {
+  const ranks = (list || [])
+    .map((a) => a.journal?.rank)
+    .filter((r) => Number.isFinite(r));
+  return ranks.length ? Math.max(...ranks) + 1 : 1;
+}
+
+// ── worker API ─────────────────────────────────────────────────────
+
+// Matches src/photos/dashboard_page.js exactly — the worker stores this hash,
+// so any difference here means "Invalid login hash".
+async function sha256Hash(email, password) {
+  const enc = new TextEncoder().encode(email.toLowerCase() + ":" + password);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(CFG.apiBase + path, {
+    ...opts,
+    headers: { ...(opts.headers || {}), Authorization: `Bearer ${token()}` },
+  });
+  if (res.status === 401) {
+    signOut(false);
+    throw new Error("Session expired — sign in again.");
+  }
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j.error || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+function patchAlbum(id, body) {
+  return api(`/photos/api/albums/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function signOut(rerender = true) {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(EMAIL_KEY);
+  albums = [];
+  if (rerender) renderAdmin();
+}
+
+// ── views ──────────────────────────────────────────────────────────
+
+function loginView() {
+  return `
+<div class="view page">
+  <div class="inner" style="max-width:420px">
+    <div class="kicker">Journal editor</div>
+    <h1 style="font-size:clamp(28px,3.6vw,44px)">Sign in</h1>
+    <p style="margin:20px 0 0;font-size:15px;line-height:1.7;color:var(--muted)">
+      The same account as your photo library at
+      <a href="${esc(CFG.apiBase)}/photos" target="_blank" rel="noopener">/photos</a>.
+    </p>
+    <form id="login-form" class="adm-form" style="margin-top:28px">
+      <label>Email<input type="email" id="adm-email" autocomplete="username" required value="${esc(account())}"></label>
+      <label>Password<input type="password" id="adm-pass" autocomplete="current-password" required></label>
+      ${error ? `<div class="adm-error">${esc(error)}</div>` : ""}
+      <button class="btn btn-primary" type="submit" ${busy ? "disabled" : ""}>${busy ? "Signing in…" : "Sign in"}</button>
+    </form>
+  </div>
+</div>`;
+}
+
+function albumCard(a) {
+  const j = a.journal;
+  const published = !!j;
+  const warnShare = published && !a.shareEnabled;
+  return `
+<div class="adm-card${published ? " on" : ""}" data-album="${esc(a.id)}">
+  <div class="adm-card-head">
+    <div>
+      <div class="adm-title">${esc(a.title)}</div>
+      <div class="adm-meta">
+        ${a.photoCount || 0} ${a.photoCount === 1 ? "frame" : "frames"}
+        · ${a.locationName ? esc(a.locationName) : "no map pin"}
+        · ${a.storageBackend === "s3" ? "S3" : "D1"}
+        ${a.role === "collaborator" ? " · shared with you" : ""}
+      </div>
+    </div>
+    <div class="adm-card-actions">
+      <a class="btn btn-ghost sm" href="${esc(CFG.apiBase)}/photos?album=${encodeURIComponent(a.id)}" target="_blank" rel="noopener">Add photos</a>
+      <label class="adm-switch">
+        <input type="checkbox" data-publish ${published ? "checked" : ""}>
+        <span>In the journal</span>
+      </label>
+    </div>
+  </div>
+
+  ${warnShare ? `
+  <div class="adm-warn">
+    This album's public link is off, so the journal can't show its photos.
+    <button class="btn btn-ghost sm" data-enable-share>Turn the link on</button>
+  </div>` : ""}
+
+  ${published ? `
+  <div class="adm-entry">
+    <div class="adm-row">
+      <label class="sm">Order<input type="number" data-f="rank" value="${esc(j.rank ?? 9999)}" min="0" step="1"></label>
+      <label class="sm">Date label<input type="text" data-f="date" value="${esc(j.date || "")}" placeholder="Sept 2024"></label>
+      <label class="adm-switch"><input type="checkbox" data-f="hero" ${j.hero ? "checked" : ""}><span>Use on the home hero</span></label>
+    </div>
+    <label>Lede — the opening line<textarea data-f="lede" rows="2" placeholder="${esc(a.description || "The first morning I could not walk up one flight of stairs.")}">${esc(j.lede || "")}</textarea></label>
+    <label>Entry — blank line between paragraphs<textarea data-f="body" rows="7" placeholder="It does hard light, and then it does none…">${esc(joinParas(j.body))}</textarea></label>
+    <label>Pull quote<textarea data-f="quote" rows="2">${esc(j.quote || "")}</textarea></label>
+    <label>Caption under the detail pair<input type="text" data-f="caption" value="${esc(j.caption || "")}"></label>
+    <div class="adm-row end">
+      <span class="adm-saved" hidden>Saved</span>
+      <button class="btn btn-primary sm" data-save>Save entry</button>
+    </div>
+  </div>` : ""}
+</div>`;
+}
+
+function editorView() {
+  const published = albums.filter((a) => a.journal).length;
+  return `
+<div class="view page">
+  <div class="inner">
+    <div class="adm-head">
+      <div>
+        <div class="kicker">Journal editor</div>
+        <h1 style="font-size:clamp(28px,3.6vw,44px)">Your trips</h1>
+        <p class="adm-meta" style="margin-top:10px">
+          ${published} of ${albums.length} ${albums.length === 1 ? "album" : "albums"} published ·
+          signed in as ${esc(account())}
+        </p>
+      </div>
+      <div class="adm-card-actions">
+        <button class="btn btn-primary" id="new-trip">+ New trip</button>
+        <button class="btn btn-ghost" id="sign-out">Sign out</button>
+      </div>
+    </div>
+
+    ${error ? `<div class="adm-error" style="margin-top:20px">${esc(error)}</div>` : ""}
+
+    <p class="adm-note">
+      Publishing an album <em>is</em> the sync — the journal reads its photos live
+      through the album's share link, so anything you upload at
+      <a href="${esc(CFG.apiBase)}/photos" target="_blank" rel="noopener">/photos</a> appears here straight away.
+    </p>
+
+    <div class="adm-list">
+      ${albums.length ? albums.map(albumCard).join("") : '<div class="adm-empty">No albums yet. Create your first trip above.</div>'}
+    </div>
+  </div>
+</div>`;
+}
+
+// ── wiring ─────────────────────────────────────────────────────────
+
+function cardBody(card) {
+  const get = (f) => card.querySelector(`[data-f="${f}"]`);
+  return {
+    rank: Number(get("rank")?.value ?? 9999),
+    hero: !!get("hero")?.checked,
+    date: get("date")?.value || null,
+    lede: get("lede")?.value || null,
+    body: splitParas(get("body")?.value),
+    quote: get("quote")?.value || null,
+    caption: get("caption")?.value || null,
+  };
+}
+
+async function withError(fn) {
+  try {
+    error = "";
+    await fn();
+  } catch (err) {
+    error = err.message;
+  }
+  await renderAdmin();
+}
+
+function wireEditor(root) {
+  root.querySelector("#sign-out").addEventListener("click", () => signOut());
+
+  root.querySelector("#new-trip").addEventListener("click", () =>
+    withError(async () => {
+      const title = prompt("Trip name — the location is geocoded from it, e.g. \"Ladakh 2024\"");
+      if (!title?.trim()) return;
+      // S3 backend to match where the rest of the archive lives; the album is
+      // created empty and photos are added in the photo library.
+      await api("/photos/api/albums", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), storageBackend: "s3" }),
+      });
+      await refresh();
+    }));
+
+  root.querySelectorAll(".adm-card").forEach((card) => {
+    const id = card.dataset.album;
+
+    card.querySelector("[data-publish]").addEventListener("change", (e) =>
+      withError(async () => {
+        // Unpublish sends null; publish seeds a rank so the trip lands last
+        // and the entry fields appear ready to fill in.
+        const journal = e.target.checked ? { rank: nextRank(albums), body: [] } : null;
+        await patchAlbum(id, { journal });
+        await refresh();
+      }));
+
+    card.querySelector("[data-enable-share]")?.addEventListener("click", () =>
+      withError(async () => {
+        await patchAlbum(id, { shareEnabled: true });
+        await refresh();
+      }));
+
+    card.querySelector("[data-save]")?.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const saved = card.querySelector(".adm-saved");
+      btn.disabled = true;
+      try {
+        error = "";
+        const updated = await patchAlbum(id, { journal: cardBody(card) });
+        Object.assign(albums.find((a) => a.id === id) || {}, updated);
+        await loadTrips(); // keep the public views in step with the edit
+        saved.hidden = false;
+        setTimeout(() => { saved.hidden = true; }, 2000);
+      } catch (err) {
+        error = err.message;
+        await renderAdmin();
+        return;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function wireLogin(root) {
+  root.querySelector("#login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = root.querySelector("#adm-email").value.trim();
+    const password = root.querySelector("#adm-pass").value;
+    busy = true;
+    await withError(async () => {
+      try {
+        const hash = await sha256Hash(email, password);
+        const r = await fetch(`${CFG.apiBase}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: SOURCE, hash }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || "Login failed");
+        localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.setItem(EMAIL_KEY, data.email || email);
+        await refresh();
+      } finally {
+        busy = false;
+      }
+    });
+  });
+}
+
+async function refresh() {
+  albums = await api("/photos/api/albums");
+  await loadTrips();
+}
+
+// ── entry point ────────────────────────────────────────────────────
+
+export async function renderAdmin() {
+  const root = document.getElementById("view");
+
+  if (token() && !albums.length && !error) {
+    try {
+      albums = await api("/photos/api/albums");
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  const signedIn = !!token();
+  root.innerHTML = signedIn ? editorView() : loginView();
+  afterRender("admin");
+
+  if (signedIn) wireEditor(root);
+  else wireLogin(root);
+}
