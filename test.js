@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { routeOf, tripPath, photoUrl, pickPhotos, fmtCoords, mapTrip } from "./public/app.js";
-import { splitParas, joinParas, nextRank, togglePick, moveInList, dateOrder, cleanSelection, mergeDraftOrder } from "./public/admin.js";
+import { splitParas, joinParas, nextRank, togglePick, moveInList, moveToIndex, dateOrder, cleanSelection, mergeDraftOrder } from "./public/admin.js";
 
 test("routeOf maps every path to a view", () => {
   assert.deepEqual(routeOf("/"), { view: "home", id: null });
@@ -207,4 +207,24 @@ test("moveInList nudges a frame and clamps at both ends", () => {
   const before = [...ids];
   moveInList(ids, "a", 1);
   assert.deepEqual(ids, before);
+});
+
+test("moveToIndex drops a frame at an absolute position", () => {
+  const ids = ["a", "b", "c", "d"];
+  // drag 'd' onto the cover slot
+  assert.deepEqual(moveToIndex(ids, "d", 0), ["d", "a", "b", "c"]);
+  // drag 'a' to the end
+  assert.deepEqual(moveToIndex(ids, "a", 3), ["b", "c", "d", "a"]);
+  assert.deepEqual(moveToIndex(ids, "b", 2), ["a", "c", "b", "d"]);
+  // dropping on itself, out of range, or an unknown id changes nothing
+  assert.deepEqual(moveToIndex(ids, "b", 1), ids);
+  assert.deepEqual(moveToIndex(ids, "a", -5), ["a", "b", "c", "d"]);
+  assert.deepEqual(moveToIndex(ids, "a", 99), ["b", "c", "d", "a"]);
+  assert.deepEqual(moveToIndex(ids, "zz", 0), ids);
+  assert.deepEqual(moveToIndex(undefined, "a", 0), []);
+  // input is never mutated, and the result is always a permutation
+  const before = [...ids];
+  const out = moveToIndex(ids, "c", 0);
+  assert.deepEqual(ids, before);
+  assert.deepEqual([...out].sort(), [...ids].sort());
 });

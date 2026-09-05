@@ -34,6 +34,7 @@ const DETAIL = new Map();
 // instead of waiting for a save. Order is the layout — see the helpers above.
 const PICKED = new Map();
 let drafting = null; // albumId currently waiting on the model
+let dragId = null; // frame being dragged in the sequence strip
 
 const token = () => localStorage.getItem(TOKEN_KEY) || "";
 const account = () => localStorage.getItem(EMAIL_KEY) || "";
@@ -89,15 +90,22 @@ export function togglePick(albumPhotos, current, id) {
   return out;
 }
 
-/** Moves one frame within the sequence. Clamped at both ends — no wrap. */
-export function moveInList(ids, id, delta) {
+/** Moves one frame to an absolute position. Clamped; never wraps or mutates. */
+export function moveToIndex(ids, id, to) {
   const out = [...(ids || [])];
   const from = out.indexOf(id);
   if (from === -1) return out;
-  const to = Math.min(Math.max(from + delta, 0), out.length - 1);
-  if (to === from) return out;
-  out.splice(to, 0, out.splice(from, 1)[0]);
+  const target = Math.min(Math.max(Number(to), 0), out.length - 1);
+  if (!Number.isInteger(target) || target === from) return out;
+  out.splice(target, 0, out.splice(from, 1)[0]);
   return out;
+}
+
+/** Nudge one step. The keyboard/touch path — HTML5 drag does neither. */
+export function moveInList(ids, id, delta) {
+  const from = (ids || []).indexOf(id);
+  if (from === -1) return [...(ids || [])];
+  return moveToIndex(ids, id, from + delta);
 }
 
 /** Restores album (chronological) order for the current selection. */
@@ -287,18 +295,18 @@ function pickerBlock(a) {
     </div>
     <div class="adm-meta" style="margin:2px 0 10px">
       Order is the layout: 1 is the cover and home hero, 2 runs full width, 3
-      and 4 are the detail pair, the rest fill the grid. Nudge frames with ◀ ▶,
-      or let drafting sequence them — it reads up to the first six and rewrites
-      the fields above.
+      and 4 are the detail pair, the rest fill the grid. Drag a frame to move
+      it (or use ◀ ▶), or let drafting sequence them — it reads up to the first
+      six and rewrites the fields above.
     </div>
     ${n ? `
     <div class="adm-seq">
       ${picked.map((pid, i) => {
         const ph = photos.find((x) => x.id === pid);
         return `
-        <div class="adm-seq-item">
+        <div class="adm-seq-item" draggable="true" data-seq-id="${esc(pid)}">
           <div class="adm-seq-frame">
-            <img src="${esc(CFG.apiBase)}/share/${encodeURIComponent(a.shareToken)}/photos/${encodeURIComponent(pid)}/thumb" alt="${esc(ph?.filename || "Frame")}" loading="lazy">
+            <img draggable="false" src="${esc(CFG.apiBase)}/share/${encodeURIComponent(a.shareToken)}/photos/${encodeURIComponent(pid)}/thumb" alt="${esc(ph?.filename || "Frame")}" loading="lazy">
             <span class="adm-thumb-n">${i + 1}</span>
           </div>
           <div class="adm-seq-slot">${i < SLOT.length ? SLOT[i] : "Grid"}</div>
@@ -442,6 +450,53 @@ function wireEditor(root) {
       PICKED.set(id, []);
       renderAdmin();
     });
+
+    // Drag to reorder. Delegated on the strip because renderAdmin() rebuilds
+    // these nodes on every state change.
+    const seq = card.querySelector(".adm-seq");
+    if (seq) {
+      const itemAt = (e) => e.target.closest("[data-seq-id]");
+      const clearHints = () =>
+        seq.querySelectorAll(".over").forEach((n) => n.classList.remove("over"));
+
+      seq.addEventListener("dragstart", (e) => {
+        const item = itemAt(e);
+        if (!item) return;
+        dragId = item.dataset.seqId;
+        e.dataTransfer.effectAllowed = "move";
+        // Firefox starts no drag at all without data set.
+        e.dataTransfer.setData("text/plain", dragId);
+        item.classList.add("dragging");
+      });
+
+      seq.addEventListener("dragover", (e) => {
+        const item = itemAt(e);
+        if (!item || !dragId || item.dataset.seqId === dragId) return;
+        e.preventDefault(); // the default is "reject the drop"
+        e.dataTransfer.dropEffect = "move";
+        clearHints();
+        item.classList.add("over");
+      });
+
+      seq.addEventListener("dragleave", (e) => itemAt(e)?.classList.remove("over"));
+
+      seq.addEventListener("drop", (e) => {
+        const item = itemAt(e);
+        if (!item || !dragId) return;
+        e.preventDefault();
+        const order = [...seq.querySelectorAll("[data-seq-id]")].map((n) => n.dataset.seqId);
+        PICKED.set(id, moveToIndex(PICKED.get(id), dragId, order.indexOf(item.dataset.seqId)));
+        dragId = null;
+        renderAdmin();
+      });
+
+      // Fires on a cancelled drag too, so the half-dragged styling never sticks.
+      seq.addEventListener("dragend", () => {
+        dragId = null;
+        clearHints();
+        seq.querySelectorAll(".dragging").forEach((n) => n.classList.remove("dragging"));
+      });
+    }
 
     card.querySelectorAll("[data-move-id]").forEach((btn) => {
       btn.addEventListener("click", () => {

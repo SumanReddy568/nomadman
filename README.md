@@ -61,8 +61,10 @@ share it and never enough to put it on this front page.
   of it. Pick the frames this entry shows. Pick nothing and the whole album
   shows, which is what entries published before this existed keep doing.
   **Their order is the layout**: 1 is the cover and home hero, 2 runs full
-  width, 3 and 4 are the detail pair, the rest fill the grid. Hand-picking
-  stays in date order until something reorders it; "Date order" puts it back.
+  width, 3 and 4 are the detail pair, the rest fill the grid. Drag the frames
+  in the sequence strip to reorder them (◀ ▶ do the same for touch and
+  keyboard). Hand-picking stays in date order until something reorders it;
+  "Date order" puts it back.
 - **✨ Draft with AI** — reads up to the first six chosen frames, writes the
   prose from what's actually in them, and **resequences them** — which frame
   leads, which runs full width, which two pair up. It fills the form; it never
