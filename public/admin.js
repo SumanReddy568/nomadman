@@ -89,6 +89,17 @@ export function togglePick(albumPhotos, current, id) {
   return out;
 }
 
+/** Moves one frame within the sequence. Clamped at both ends — no wrap. */
+export function moveInList(ids, id, delta) {
+  const out = [...(ids || [])];
+  const from = out.indexOf(id);
+  if (from === -1) return out;
+  const to = Math.min(Math.max(from + delta, 0), out.length - 1);
+  if (to === from) return out;
+  out.splice(to, 0, out.splice(from, 1)[0]);
+  return out;
+}
+
 /** Restores album (chronological) order for the current selection. */
 export function dateOrder(albumPhotos, ids) {
   const chosen = new Set(ids || []);
@@ -276,9 +287,29 @@ function pickerBlock(a) {
     </div>
     <div class="adm-meta" style="margin:2px 0 10px">
       Order is the layout: 1 is the cover and home hero, 2 runs full width, 3
-      and 4 are the detail pair, the rest fill the grid. Drafting reads up to
-      the first six, rewrites the fields above and resequences them.
+      and 4 are the detail pair, the rest fill the grid. Nudge frames with ◀ ▶,
+      or let drafting sequence them — it reads up to the first six and rewrites
+      the fields above.
     </div>
+    ${n ? `
+    <div class="adm-seq">
+      ${picked.map((pid, i) => {
+        const ph = photos.find((x) => x.id === pid);
+        return `
+        <div class="adm-seq-item">
+          <div class="adm-seq-frame">
+            <img src="${esc(CFG.apiBase)}/share/${encodeURIComponent(a.shareToken)}/photos/${encodeURIComponent(pid)}/thumb" alt="${esc(ph?.filename || "Frame")}" loading="lazy">
+            <span class="adm-thumb-n">${i + 1}</span>
+          </div>
+          <div class="adm-seq-slot">${i < SLOT.length ? SLOT[i] : "Grid"}</div>
+          <div class="adm-seq-move">
+            <button type="button" data-move-id="${esc(pid)}" data-move-by="-1" ${i === 0 ? "disabled" : ""} title="Move earlier">◀</button>
+            <button type="button" data-move-id="${esc(pid)}" data-move-by="1" ${i === n - 1 ? "disabled" : ""} title="Move later">▶</button>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>` : ""}
+
     <div class="adm-thumbs">
       ${photos.map((ph) => {
         const at = picked.indexOf(ph.id);
@@ -410,6 +441,13 @@ function wireEditor(root) {
     card.querySelector("[data-pick-none]")?.addEventListener("click", () => {
       PICKED.set(id, []);
       renderAdmin();
+    });
+
+    card.querySelectorAll("[data-move-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        PICKED.set(id, moveInList(PICKED.get(id), btn.dataset.moveId, Number(btn.dataset.moveBy)));
+        renderAdmin();
+      });
     });
 
     card.querySelector("[data-pick-date]")?.addEventListener("click", () => {

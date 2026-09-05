@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { routeOf, tripPath, photoUrl, pickPhotos, fmtCoords, mapTrip } from "./public/app.js";
-import { splitParas, joinParas, nextRank, togglePick, dateOrder, cleanSelection, mergeDraftOrder } from "./public/admin.js";
+import { splitParas, joinParas, nextRank, togglePick, moveInList, dateOrder, cleanSelection, mergeDraftOrder } from "./public/admin.js";
 
 test("routeOf maps every path to a view", () => {
   assert.deepEqual(routeOf("/"), { view: "home", id: null });
@@ -189,4 +189,22 @@ test("mergeDraftOrder leads with the model's sequence, keeps the rest", () => {
   // ids it invented (or that were since deselected) are ignored
   assert.deepEqual(mergeDraftOrder(["a", "b"], ["zz", "b"]), ["b", "a"]);
   assert.deepEqual(mergeDraftOrder(undefined, ["a"]), []);
+});
+
+test("moveInList nudges a frame and clamps at both ends", () => {
+  const ids = ["a", "b", "c", "d"];
+  assert.deepEqual(moveInList(ids, "c", -1), ["a", "c", "b", "d"]);
+  assert.deepEqual(moveInList(ids, "b", 1), ["a", "c", "b", "d"]);
+  // promoting to cover
+  assert.deepEqual(moveInList(["a", "b", "c"], "b", -1), ["b", "a", "c"]);
+  // no wrap-around off either end
+  assert.deepEqual(moveInList(ids, "a", -1), ids);
+  assert.deepEqual(moveInList(ids, "d", 1), ids);
+  // unknown id and empty input are no-ops, never a throw
+  assert.deepEqual(moveInList(ids, "zz", 1), ids);
+  assert.deepEqual(moveInList(undefined, "a", 1), []);
+  // the original array is not mutated
+  const before = [...ids];
+  moveInList(ids, "a", 1);
+  assert.deepEqual(ids, before);
 });
